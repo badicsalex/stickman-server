@@ -1,6 +1,9 @@
 #include "standard_stuff.h"
 #include <windows.h>
 
+//#include <stdio.h>
+
+
 //// TThread
 
 unsigned long __stdcall TThread::ThreadFunc(void* pointer)
@@ -45,3 +48,4 @@ int TTimer::VirtThreadFunc()
 	}
 	return 0;
 }
+

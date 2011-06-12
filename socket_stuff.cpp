@@ -12,7 +12,7 @@ void TSocketFrame::EnlargeBuffer(int mekkorara) //nem sokon múlt, hogy ne buffer
 		while (tmp<mekkorara)
 			tmp<<=1;
 
-		char* ujdata=new char[tmp];
+		unsigned char* ujdata=new unsigned char[tmp];
 		if (datalen>0)
 			for (int i=0;i<datalen;++i)
 				ujdata[i]=data[i];
@@ -22,7 +22,7 @@ void TSocketFrame::EnlargeBuffer(int mekkorara) //nem sokon múlt, hogy ne buffer
 		datalen=tmp;
 	}
 
-char TSocketFrame::ReadChar()
+unsigned char TSocketFrame::ReadChar()
 {
 	++cursor;
 	if (cursor<=datalen)
@@ -63,7 +63,7 @@ string TSocketFrame::ReadString()
 	return result;
 }
 
-void TSocketFrame::WriteChar(char mit)
+void TSocketFrame::WriteChar(unsigned char mit)
 {
 	EnlargeBuffer(cursor+1);
 	data[cursor]=mit;
@@ -163,7 +163,7 @@ bool TBufferedSocket::RecvFrame(TSocketFrame& hova)
 	if (hova.data)
 		delete [] hova.data;
 
-	hova.data=new char[siz];
+	hova.data=new unsigned char[siz];
 	
 	for (int i=0;i<siz;++i)
 		hova.data[i]=recvbuffer[2+i];
@@ -173,10 +173,16 @@ bool TBufferedSocket::RecvFrame(TSocketFrame& hova)
 	return true;
 }
 
-void TBufferedSocket::SendFrame(TSocketFrame& mit)
+void TBufferedSocket::SendFrame(TSocketFrame& mit,bool finalframe)
 {
 	if (mit.cursor<=0) // má megint balfasz voltál
 		return;
+
+	if (closeaftersend) //má volt egy final frame
+		return;
+
+	if(finalframe)
+		closeaftersend=true;
 
 	char egybyte;
 	egybyte=mit.cursor;

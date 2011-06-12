@@ -13,21 +13,21 @@ class TSocketFrame
 	TSocketFrame& operator=(TSocketFrame&);//pointerekkel ilyent nem játszunk.
 	void EnlargeBuffer(int mekkorara);
 public:
-	char* data; // csínján.
+	unsigned char* data; // csínján.
 	int cursor;
 	int datalen;
 
 	// átveszi a char* kezelését, felszabadítja destruáláskor.
-	TSocketFrame(char* data,int datalen):data(data),datalen(datalen),cursor(0){}
+	TSocketFrame(unsigned char* data,int datalen):data(data),datalen(datalen),cursor(0){}
 	TSocketFrame():data(0),datalen(0),cursor(0){}
 	~TSocketFrame(){if (data) delete[] data;}
 
 	void Reset(){cursor=0;}
-	char ReadChar();
+	unsigned char ReadChar();
 	unsigned int ReadWord();
 	int ReadInt();
 	string ReadString();
-	void WriteChar(char mit);
+	void WriteChar(unsigned char mit);
 	void WriteWord(unsigned int mit);
 	void WriteInt(int mit);
 	void WriteString(const string& mit);
@@ -41,9 +41,9 @@ class TBufferedSocket
 	vector<char> sendbuffer;
 	TBufferedSocket(const TBufferedSocket& mirol);
 	TBufferedSocket& operator= (const TBufferedSocket& mirol);
+	bool closeaftersend;
 public:
 	int error;// ha nem 0, gáz volt.
-	bool closeaftersend;
 	// A függvény meghívásával elfogadja a szerzõdési feltételeket
 	// miszerint teljesen lemond a socket használatáról.
 	TBufferedSocket(SOCKET sock):sock(sock), error(0), closeaftersend(false){};
@@ -51,7 +51,7 @@ public:
 
 	void Update(); //Hívjad sokat. Mert alattam az a kettõ csak a buffereket nézi
 	bool RecvFrame(TSocketFrame& hova);// Légyszi újonnan generáltat, mert úgyis felülírja.
-	void SendFrame(TSocketFrame& mit);// Légyszi ne legyen üres.
+	void SendFrame(TSocketFrame& mit,bool finalframe=false);// Légyszi ne legyen üres.
 };
 
 // abstract class virtual callback-ekkel
@@ -69,11 +69,12 @@ protected:
 	SOCKET listenersock;
 	vector<TMySocket*> socketek;
 	void DeleteSocket(int index);//és close
+	virtual void OnConnect(TMySocket& sock)=0;
+	virtual void OnUpdate(TMySocket& sock)=0;
 public:
 	TBufferedServer(int port);
 	~TBufferedServer(){ while (!socketek.empty()) DeleteSocket(0); }
-	virtual void OnConnect(TMySocket& sock)=0;
-	virtual void OnUpdate(TMySocket& sock)=0;
+	
 	void Update();
 };
 

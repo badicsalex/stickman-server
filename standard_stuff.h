@@ -85,4 +85,6 @@ class TTimer: public TThread{
 public:
 	TTimer(int interval):interval(interval){}
 };
+
+
 #endif
