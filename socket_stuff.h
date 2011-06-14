@@ -1,6 +1,11 @@
 #ifndef SOCKET_STUFF_INCLUDED
 #define SOCKET_STUFF_INCLUDED
+#ifdef _WIN32
 #include <winsock.h>
+#else
+#include <netinet/ip.h>
+#endif
+
 #include <string>
 #include <vector>
 
