@@ -3,6 +3,7 @@
 #include "crypt_stuff.h"
 #include <string>
 #include <iostream>
+#include <stdlib.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -11,8 +12,13 @@
 int GetTickCount()
 {
 	timespec tim;
-	clock_gettime(CLOCK_MONOTONIC,&tim,0);
+	clock_gettime(CLOCK_MONOTONIC,&tim);
 	return tim.tv_sec*1000+tim.tv_nsec/1000000;
+}
+
+void Sleep(int msec)
+{
+	usleep(msec*1000);
 }
 #endif
 
@@ -294,9 +300,9 @@ protected:
 			else
 			switch(type)
 			{
-				case CLIENTMSG_LOGIN:	OnMsgLogin(sock,recvd); cout<<"login"<<endl; break;
-				case CLIENTMSG_STATUS:	OnMsgStatus(sock,recvd); cout<<"status"<<endl;break;
-				case CLIENTMSG_CHAT:	OnMsgChat(sock,recvd); cout<<"chat"<<endl; break;
+				case CLIENTMSG_LOGIN:	OnMsgLogin(sock,recvd); break;
+				case CLIENTMSG_STATUS:	OnMsgStatus(sock,recvd); break;
+				case CLIENTMSG_CHAT:	OnMsgChat(sock,recvd); break;
 				default:
 					SendKick(sock,"Protocol error: unknown packet type",true);
 			}
@@ -316,11 +322,11 @@ protected:
 	}
 public:
 
-	StickmanServer(int port): TBufferedServer(port),lastUID(1){}
+	StickmanServer(int port): TBufferedServer<TStickContext>(port),lastUID(1){}
 
 	void Update()
 	{
-		TBufferedServer::Update();
+		TBufferedServer<TStickContext>::Update();
 	}
 };
 
