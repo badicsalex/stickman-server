@@ -7,15 +7,16 @@
 
 using namespace std;
 
-#define APP_PORT 25252
-
 struct TStickContext{
 	/* adatok */
 	string nev;
-	int fegyver; 
+	int fegyver;
+	int fejrevalo;
 	int UID;
 	unsigned long ip;
 	unsigned short port;
+	int kills; //mai napon
+	int checksum;
 
 	/* állapot */
 	unsigned int lastrecv;
@@ -26,11 +27,13 @@ struct TStickContext{
 };
 
 struct TConfig{
+	int port;
 	int clientversion;
 	int serverversion;
 	unsigned char sharedkey[20];
 } config =
 {
+	25252,
 	30000,
 	20000,
 	{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19}
@@ -42,6 +45,9 @@ struct TConfig{
 	string név
 	string jelszó
 	int fegyver
+	int fejrevaló
+	char[2] port
+	int checksum
 */
 
 #define CLIENTMSG_STATUS 2
@@ -76,6 +82,8 @@ struct TConfig{
 		int uid
 		string nev
 		int fegyver
+		int fejrevalo
+		int killek
 		}
 */
 
@@ -92,11 +100,17 @@ struct TConfig{
 
 class StickmanServer: public TBufferedServer<TStickContext>{
 protected:
+	int lastUID;
 	virtual void OnConnect(TMySocket& sock)
 	{
 		sock.context.loggedin=false;
- 		sock.context.UID=rand();
+ 		sock.context.UID=++lastUID;
+		for(int i=0;i<20;++i)
+			sock.context.crypto[i]=rand();
 		sock.context.lastrecv=GetTickCount();
+		sock.context.lastsend=0;
+		sock.context.kills=0;
+		sock.context.ip=sock.address;
 	}
 	
 	void SendKick(TMySocket& sock,const string& indok="Kicked without reason",bool hard=false)
@@ -108,16 +122,13 @@ protected:
 		sock.SendFrame(frame,true);
 	}
 
-	void SendProtocolError(TMySocket& sock)
-	{
-		SendKick(sock,"Protocol error",true);
-	}
-
 	void SendPlayerList(TMySocket& sock)
 	{
 		TSocketFrame frame;
+		frame.WriteChar(SERVERMSG_PLAYERLIST);
 		int n=socketek.size();
 		frame.WriteInt(n);
+		/*!TODO legközelebbi 50 kiválasztása */
 		for(int i=0;i<n;++i)
 		{
 			TStickContext& scontext=socketek[i]->context;
@@ -126,15 +137,36 @@ protected:
 			frame.WriteChar((unsigned char)(scontext.ip>>16));
 			frame.WriteChar((unsigned char)(scontext.ip>24));
 
-			frame.WriteInt((unsigned char)(scontext.port));
-			frame.WriteInt((unsigned char)(scontext.port>>8));
+			frame.WriteChar((unsigned char)(scontext.port));
+			frame.WriteChar((unsigned char)(scontext.port>>8));
 		
 			frame.WriteInt(scontext.UID);
 
 			frame.WriteString(scontext.nev);
 
 			frame.WriteInt(scontext.fegyver);
+			frame.WriteInt(scontext.fejrevalo);
+			frame.WriteInt(scontext.kills);
 		}
+		sock.SendFrame(frame);
+	}
+
+	void SendLoginOk(TMySocket& sock)
+	{
+		TSocketFrame frame;
+		frame.WriteChar(SERVERMSG_LOGINOK);
+		frame.WriteInt(sock.context.UID);
+		for(int i=0;i<20;++i)
+			frame.WriteChar(sock.context.crypto[i]);
+		sock.SendFrame(frame);
+	}
+
+	void SendChat(TMySocket& sock,const string& uzenet)
+	{
+		TSocketFrame frame;
+		frame.WriteChar(SERVERMSG_CHAT);
+		frame.WriteString(uzenet);
+		sock.SendFrame(frame);
 	}
 
 	void OnMsgLogin(TMySocket& sock,TSocketFrame& msg)
@@ -145,13 +177,35 @@ protected:
 			SendKick(sock,"Please update your client at http://stickman.hu to play",true);
 			return;
 		}
-		string nev=msg.ReadString();
+		if (sock.context.loggedin)
+		{
+			SendKick(sock,"Protocol error: already logged in",true);
+			return;
+		}
+		sock.context.nev=msg.ReadString();
+		if (sock.context.nev.length()==0)
+		{
+			SendKick(sock,"Legy szives adj meg egy nevet.",true);
+			return;
+		}
 		string jelszo=msg.ReadString();
-		int fegyver=msg.ReadInt();
+		/*!TODO Login verifikálása*/
 
+		sock.context.fegyver=msg.ReadInt();
+		sock.context.fejrevalo=msg.ReadInt();
+
+		sock.context.port =msg.ReadChar();
+		sock.context.port+=msg.ReadChar()<<8;
+		sock.context.checksum=msg.ReadInt();
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
-			SendProtocolError(sock);
+		{
+			SendKick(sock,"Protocol error: login",true);
+			return;
+		}
+		
+		SendLoginOk(sock);
 
+		sock.context.loggedin=true;
 	}
 
 	void OnMsgStatus(TMySocket& sock,TSocketFrame& msg)
@@ -160,46 +214,61 @@ protected:
 		sock.context.y=msg.ReadInt();
 
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
-			SendProtocolError(sock);
+		{
+			SendKick(sock,"Protocol error: status",true);
+			return;
+		}
 	}
 
 	void OnMsgChat(TMySocket& sock,TSocketFrame& msg)
 	{
 		string uzenet=msg.ReadString();
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
-			SendProtocolError(sock);
-
+		{
+			SendKick(sock,"Protocol error: chat",true);
+			return;
+		}
+		uzenet=sock.context.nev+": "+uzenet;
 		/*!TODO Chat üzenet szétkürtölése */
+		int n=socketek.size();
+		for(int i=0;i<n;++i)
+			SendChat(*socketek[i],uzenet);
 	}
 
 	void OnMsgKill(TMySocket& sock,TSocketFrame& msg)
 	{
 		int UID=msg.ReadInt();
 
-		// Minden kill után egyet ráhashelünk a jelenlegi crypt értékre
-		// és xoroljuk a kliens és szerver között megosztott kulccsal.
+		// Minden kill után seedet xorolunk a titkos kulccsal, és egyet
+		// ráhashelünk a jelenlegi crypt értékre.
 		// Ez kellõen fos verifikálása a killnek, de ennyivel kell beérni
+		// Thx Kirknek a security auditingért
 
 		unsigned char newcrypto[20];
-		SHA1_Hash(sock.context.crypto[i],20,newcrypto);
 		for(int i=0;i<20;++i)
-		{
-			sock.context.crypto[i]=newcrypto[i]^config.sharedkey[i];
+			newcrypto[i]=sock.context.crypto[i]^config.sharedkey[i];
 
-			// Ha már itt vagyunk, karakterenként lehet ellenõprizni is
-			// Ha érdekelne, hogy átlátható-e a kód, ez külön for
-			// ciklusban lenne.
+		SHA1_Hash(newcrypto,20,sock.context.crypto);
+		
+		for(int i=0;i<20;++i)
 			if (sock.context.crypto[i]!=msg.ReadChar())
 			{
-				SendKick(sock,"Kill verification error",true);
+				SendKick(sock,"Protocol error: kill verification",true);
 				return;
 			}
-		}
+		
 
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
-			SendProtocolError(sock);
+		{
+			SendKick(sock,"Protocol error: kill",true);
+			return;
+		}
 
-		/*!TODO kill regisztrálása */
+		int n=socketek.size();
+		for(int i=0;i<n;++i)
+			if (socketek[i]->context.UID==UID &&
+				socketek[i]->context.loggedin)
+				socketek[i]->context.kills+=1;
 	}
 
 	virtual void OnUpdate(TMySocket& sock)
@@ -208,26 +277,34 @@ protected:
 		while(sock.RecvFrame(recvd))
 		{
 			char type=recvd.ReadChar();
+			if (!sock.context.loggedin && type!=CLIENTMSG_LOGIN)
+				SendKick(sock,"Protocol error: not logged in",true);
+			else
 			switch(type)
 			{
-				case CLIENTMSG_LOGIN:	OnMsgLogin(sock,recvd);break;
-				case CLIENTMSG_STATUS:	OnMsgStatus(sock,recvd);break;
-				case CLIENTMSG_CHAT:	OnMsgChat(sock,recvd);break;
+				case CLIENTMSG_LOGIN:	OnMsgLogin(sock,recvd); cout<<"login"<<endl; break;
+				case CLIENTMSG_STATUS:	OnMsgStatus(sock,recvd); cout<<"status"<<endl;break;
+				case CLIENTMSG_CHAT:	OnMsgChat(sock,recvd); cout<<"chat"<<endl; break;
+				default:
+					SendKick(sock,"Protocol error: unknown packet type",true);
 			}
 			sock.context.lastrecv=GetTickCount();
 		}
 
 		/* 2000-2500 msenként küldünk playerlistát */
-		if (sock.context.lastsend<GetTickCount()+2000+(rand()&511))
+		if (sock.context.loggedin &&
+			sock.context.lastsend<GetTickCount()-2000-(rand()&511))
+		{
 			SendPlayerList(sock);
-
+			sock.context.lastsend=GetTickCount();
+		}
 		/* 10 másodperc tétlenség után kick van. */
-		if (sock.context.lastrecv<GetTickCount()+10000)
+		if (sock.context.lastrecv<GetTickCount()-10000)
 			SendKick(sock,"Ping timeout",true);
 	}
 public:
 
-	StickmanServer(int port): TBufferedServer(port){}
+	StickmanServer(int port): TBufferedServer(port),lastUID(1){}
 
 	void Update()
 	{
@@ -239,7 +316,7 @@ public:
 int main(){
 	cout<<"Stickserver starting..."<<endl;
 	{
-		StickmanServer server(1234);
+		StickmanServer server(config.port);
 		while(1)
 		{
 			server.Update();
