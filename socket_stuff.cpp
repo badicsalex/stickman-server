@@ -114,7 +114,11 @@ void TBufferedSocket::Update()
 		int mennyilett=send(sock,mit,mennyit,0);
 
 		if (mennyilett==SOCKET_ERROR)
+			#ifdef _WIN32
 			error=WSAGetLastError();
+			#else
+			error=-1337;
+			#endif
 		else
 			sendbuffer.erase(sendbuffer.begin(),sendbuffer.begin()+mennyilett);
 
@@ -130,7 +134,11 @@ void TBufferedSocket::Update()
 
 		int mennyilett=recv(sock,(char*)hova,mennyit,0);
 		if (mennyilett==SOCKET_ERROR)
+			#ifdef _WIN32
 			error=WSAGetLastError();
+			#else
+			error=-1337;
+			#endif
 		else
 		if (mennyilett==0)//connection closed
 			error=1;
@@ -201,7 +209,7 @@ int SelectForRead(SOCKET sock)
 	timeval csodavaltozo={0,0};
 	FD_ZERO(&csillamvaltozo);
 	FD_SET(sock,&csillamvaltozo);
-	return select(1,&csillamvaltozo,0,0,&csodavaltozo);
+	return select(sock+1,&csillamvaltozo,0,0,&csodavaltozo);
 }
 
 int SelectForWrite(SOCKET sock)
@@ -210,7 +218,7 @@ int SelectForWrite(SOCKET sock)
 	timeval csodavaltozo={0,0};
 	FD_ZERO(&csillamvaltozo);
 	FD_SET(sock,&csillamvaltozo);
-	return select(1,0,&csillamvaltozo,0,&csodavaltozo);
+	return select(sock+1,0,&csillamvaltozo,0,&csodavaltozo);
 }
 
 int SelectForError(SOCKET sock)
@@ -219,5 +227,5 @@ int SelectForError(SOCKET sock)
 	timeval csodavaltozo={0,0};
 	FD_ZERO(&csillamvaltozo);
 	FD_SET(sock,&csillamvaltozo);
-	return select(1,0,0,&csillamvaltozo,&csodavaltozo);
+	return select(sock+1,0,0,&csillamvaltozo,&csodavaltozo);
 }

@@ -4,11 +4,18 @@
 #include <winsock.h>
 #else
 #include <netinet/ip.h>
+typedef unsigned int ULONG;
+typedef ULONG SOCKET;
+typedef sockaddr_in SOCKADDR_IN;
+typedef sockaddr SOCKADDR;
+#define INVALID_SOCKET -1
+#define SOCKET_ERROR -1
+#define closesocket close
 #endif
 
 #include <string>
 #include <vector>
-
+#include <iostream>
 using namespace std;
 
 class TSocketFrame
@@ -94,9 +101,10 @@ int SelectForError(SOCKET sock);
 template <class TContext>
  TBufferedServer<TContext>::TBufferedServer(int port)
 {
+	#ifdef _WIN32
 	WSADATA data;
 	WSAStartup(MAKEWORD(2, 2), &data);
-
+	#endif
 
 	SOCKADDR_IN sockaddr;
 	sockaddr.sin_family = AF_INET;
@@ -122,16 +130,23 @@ template <class TContext>
 template <class TContext>
 void  TBufferedServer<TContext>::Update()
 {
-	// accept stuff 
+	// accept stuff
 	while(SelectForRead(listenersock))
 	{
 		sockaddr_in addr;
+		#ifdef _WIN32
 		int addrlen=sizeof(addr);
+		#else
+		socklen_t addrlen=sizeof(addr);
+		#endif
 		SOCKET sock=accept(listenersock,(sockaddr*)&addr,&addrlen);
 		if (sock==INVALID_SOCKET)
 			break; // húha...
-
+		#ifdef _WIN32
 		TMySocket* ujclient=new TMySocket(sock,addr.sin_addr.S_un.S_addr);
+		#else
+		TMySocket* ujclient=new TMySocket(sock,addr.sin_addr.s_addr);
+		#endif
 		socketek.push_back(ujclient);
 		OnConnect(*socketek[socketek.size()-1]);
 	}
