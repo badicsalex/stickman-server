@@ -129,7 +129,6 @@ void TBufferedSocket::Update()
 		int mennyit=16*1024;
 
 		int mennyilett=recv(sock,(char*)hova,mennyit,0);
-		cout<<mennyilett<<endl; 
 		if (mennyilett==SOCKET_ERROR)
 			error=WSAGetLastError();
 		else

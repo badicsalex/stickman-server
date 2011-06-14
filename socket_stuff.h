@@ -3,7 +3,6 @@
 #include <winsock.h>
 #include <string>
 #include <vector>
-#include "standard_stuff.h"
 
 using namespace std;
 
