@@ -1,9 +1,21 @@
-#include <winsock.h>
-#include <iostream>
+
 #include "socket_stuff.h"
 #include "crypt_stuff.h"
-#include "windows.h"
 #include <string>
+#include <iostream>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/time.h>
+int GetTickCount()
+{
+	timespec tim;
+	clock_gettime(CLOCK_MONOTONIC,&tim,0);
+	return tim.tv_sec*1000+tim.tv_nsec/1000000;
+}
+#endif
+
 
 using namespace std;
 
