@@ -247,7 +247,6 @@ protected:
 			return;
 		}
 		uzenet=sock.context.nev+": "+uzenet;
-		/*!TODO Chat üzenet szétkürtölése */
 		int n=socketek.size();
 		for(int i=0;i<n;++i)
 			SendChat(*socketek[i],uzenet);
@@ -303,6 +302,7 @@ protected:
 				case CLIENTMSG_LOGIN:	OnMsgLogin(sock,recvd); break;
 				case CLIENTMSG_STATUS:	OnMsgStatus(sock,recvd); break;
 				case CLIENTMSG_CHAT:	OnMsgChat(sock,recvd); break;
+				case CLIENTMSG_KILLED:	OnMsgKill(sock,recvd); break;
 				default:
 					SendKick(sock,"Protocol error: unknown packet type",true);
 			}
@@ -341,5 +341,4 @@ int main(){
 			Sleep(10);
 		}
 	}
-
 }
