@@ -25,6 +25,20 @@ void Sleep(int msec)
 
 using namespace std;
 
+
+struct TConfig{
+	int port;
+	int clientversion;
+	int serverversion;
+	unsigned char sharedkey[20];
+} config =
+{
+	25252,
+	20100,
+	20000,
+	{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19}
+};
+
 struct TStickContext{
 	/* adatok */
 	string nev;
@@ -44,18 +58,6 @@ struct TStickContext{
 	unsigned char crypto[20];
 };
 
-struct TConfig{
-	int port;
-	int clientversion;
-	int serverversion;
-	unsigned char sharedkey[20];
-} config =
-{
-	25252,
-	30000,
-	20000,
-	{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19}
-};
 
 #define CLIENTMSG_LOGIN 1
 /*	Login üzenet. Erre válasz: LOGINOK, vagy KICK
