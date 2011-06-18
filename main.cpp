@@ -2,9 +2,12 @@
 #include "socket_stuff.h"
 #include "crypt_stuff.h"
 #include <string>
+#include <set>
+#include <map>
 #include <iostream>
+#include <fstream>
 #include <stdlib.h>
-
+#include <time.h>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -27,21 +30,32 @@ using namespace std;
 
 
 struct TConfig{
-	int port;
-	int clientversion;
-	int serverversion;
-	unsigned char sharedkey[20];
-} config =
-{
-	25252,
-	20100,
-	20000,
-	{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19}
-};
+	int clientversion;				//kliens verzió, ez alatt kickel
+	unsigned char sharedkey[20];	//a killenkénti kriptográfiai aláírás kulcsa
+	string webinterface;			//a webes adatbázis hostneve
+	string webinterfacedown;		//a webes adatbázis letöltõ fájljának URL-je
+	string webinterfaceup;			//aa webes adatbázis killfeltöltõ fájljának URL-je
+	TConfig(const string& honnan)
+	{
+		ifstream fil(honnan.c_str());
+		fil>>clientversion;
+		for(int i=0;i<20;++i)
+		{
+			int tmp;
+			fil>>hex>>tmp;
+			sharedkey[i]=tmp;
+		}
+		fil>>webinterface;
+		fil>>webinterfacedown;
+		fil>>webinterfaceup;
+	}
+
+} config("config.cfg");
 
 struct TStickContext{
 	/* adatok */
 	string nev;
+	string clan;
 	int fegyver;
 	int fejrevalo;
 	int UID;
@@ -58,6 +72,15 @@ struct TStickContext{
 	unsigned char crypto[20];
 };
 
+struct TStickRecord{
+	int id;
+	string jelszo;
+	int osszkill;
+	int napikill;
+	string clan;
+	set<WORD> medal;
+	int level;
+};
 
 #define CLIENTMSG_LOGIN 1
 /*	Login üzenet. Erre válasz: LOGINOK, vagy KICK
@@ -120,7 +143,14 @@ struct TStickContext{
 
 class StickmanServer: public TBufferedServer<TStickContext>{
 protected:
-	int lastUID;
+
+	map<string,TStickRecord> db;
+	map<string,int> killdb;
+
+	unsigned int lastUID;
+	unsigned int lastUDB;
+	time_t lastUDBsuccess;
+
 	virtual void OnConnect(TMySocket& sock)
 	{
 		sock.context.loggedin=false;
@@ -211,7 +241,6 @@ protected:
 			return;
 		}
 		string jelszo=msg.ReadString();
-		/*!TODO Login verifikálása*/
 
 		sock.context.fegyver=msg.ReadInt();
 		sock.context.fejrevalo=msg.ReadInt();
@@ -225,7 +254,32 @@ protected:
 			return;
 		}
 		
-		SendLoginOk(sock);
+		
+		if (db.count(sock.context.nev))//regisztrált player
+		{
+			TStickRecord& record=db[sock.context.nev];
+			if (record.jelszo!=jelszo)
+			{
+				SendKick(sock,"Hibas jelszo.",false);
+				return;
+			}
+			sock.context.clan=record.clan;
+			SendLoginOk(sock);
+			string chatuzi="Udvozollek ujra a jatekban, "+sock.context.nev+".";
+			if(record.level)
+				chatuzi=chatuzi+" A weboldalon erkezett leveled.";//faszom sprintf() kéne megint.
+			SendChat(sock,chatuzi);
+		}
+		else
+		if (jelszo.length()==0)
+		{
+			SendLoginOk(sock);
+		}
+		else
+		{
+			SendKick(sock,"Ez a nev nincs regisztralva, igy jelszo nelkul lehet csak hasznalni.",false);
+			return;
+		}
 
 		sock.context.loggedin=true;
 	}
@@ -292,6 +346,97 @@ protected:
 				socketek[i]->context.kills+=1;
 	}
 
+
+	void UpdateDb()
+	{
+		cout<<"Updating database..."<<endl;
+		//post kills
+		if(killdb.size()>0)
+		{
+			cout<<"Uploading kills "<<killdb.size()<<" kills."<<endl;
+			TBufferedSocket sock("stickman.hu",80);
+			sock.SendLine("POST /serverinterfaceu.php?auth=telefonkozpont HTTP/1.1");
+			sock.SendLine("Host: beta.stickman.hu");
+			sock.SendLine("Connection: close");
+			sock.SendLine("Content-Type: application/x-www-form-urlencoded");
+			sock.SendLine("");
+
+			/* foreach killdb
+				sock.SendLine(nev);
+				sock.SendLine(killss);
+				sock.SendLine(medals);
+			*/
+			string lin;
+			while(!sock.error)
+			{
+					sock.Update();
+					Sleep(1);
+			}
+			/* while(sock.RecvLine(lin))
+				delete killdb[lin] */
+		}
+
+		//get db
+		{
+			TBufferedSocket sock(config.webinterface,80);
+
+			char request[1024];
+			sprintf_s(request,500,config.webinterfacedown.c_str(),lastUDBsuccess);
+			cout<<"Download req: "<<config.webinterface<<string(request)<<endl;
+			sock.SendLine("GET "+string(request)+" HTTP/1.1");
+			sock.SendLine("Host: "+config.webinterface);
+			sock.SendLine("Connection: close");
+			sock.SendLine("");
+
+			//Küldjönk el és recv-eljünk mindent (kapcsolatzárásig)
+			while(!sock.error)
+			{
+					sock.Update();
+					Sleep(1);
+			}
+
+			//HTTP header átugrása
+			string headerline;
+			do
+			{
+				if(!sock.RecvLine(headerline)) //vége szakad a cuccnak, ez nem üres sor!
+				{
+					cout<<"Problem: nincs http body."<<endl;
+					headerline="shit.";
+					break;
+				}
+			}while(headerline.length()>0);
+
+			//Feldolgozás
+			while(1)
+			{
+				string nev;
+				if(!sock.RecvLine(nev)) //vége szakad a cuccnak, ez nem üres sor!
+				{
+					cout<<"Problem: nem ures sorral er veget az adas."<<endl;				
+					break;
+				}
+
+				if (nev.length()==0) //üres sor, ez jó, sikerült ápdételni
+				{
+					lastUDBsuccess=time(0);
+					break;
+				}
+				string medal=sock.RecvLine2();
+
+				TStickRecord ujrec;
+				ujrec.id=atoi(sock.RecvLine2().c_str());
+				ujrec.jelszo=sock.RecvLine2();
+				ujrec.osszkill=atoi(sock.RecvLine2().c_str());
+				ujrec.napikill=atoi(sock.RecvLine2().c_str());
+				ujrec.clan=sock.RecvLine2();
+				ujrec.level=atoi(sock.RecvLine2().c_str());
+				db[nev]=ujrec;
+			}
+		}
+		cout<<"Finished. "<<db.size()<<" player records."<<endl;
+	}
+
 	virtual void OnUpdate(TMySocket& sock)
 	{
 		TSocketFrame recvd;
@@ -326,10 +471,15 @@ protected:
 	}
 public:
 
-	StickmanServer(int port): TBufferedServer<TStickContext>(port),lastUID(1){}
+	StickmanServer(int port): TBufferedServer<TStickContext>(port),lastUID(1),lastUDB(0),lastUDBsuccess(0){}
 
 	void Update()
 	{
+		if (lastUDB<GetTickCount()-600000)
+		{
+			UpdateDb();
+			lastUDB=GetTickCount();
+		}
 		TBufferedServer<TStickContext>::Update();
 	}
 };
@@ -338,7 +488,7 @@ public:
 int main(){
 	cout<<"Stickserver starting..."<<endl;
 	{
-		StickmanServer server(config.port);
+		StickmanServer server(25252);
 		while(1)
 		{
 			server.Update();
