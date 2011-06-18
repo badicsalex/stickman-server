@@ -58,11 +58,15 @@ public:
 	// A függvény meghívásával elfogadja a szerzõdési feltételeket
 	// miszerint teljesen lemond a socket használatáról.
 	TBufferedSocket(SOCKET sock):sock(sock), error(0), closeaftersend(false){};
+	TBufferedSocket(const string& hostname,int port);
 	~TBufferedSocket(){ closesocket(sock); }
 
 	void Update(); //Hívjad sokat. Mert alattam az a kettõ csak a buffereket nézi
 	bool RecvFrame(TSocketFrame& hova);// Légyszi újonnan generáltat, mert úgyis felülírja.
-	void SendFrame(TSocketFrame& mit,bool finalframe=false);// Légyszi ne legyen üres.
+	void SendFrame(const TSocketFrame& mit,bool finalframe=false);// Légyszi ne legyen üres.
+	bool RecvLine(string& hova); // \r\n nélkül
+	const string RecvLine2(); //ha nem érdekel hogy sikrült-e, hanem mindenképp kell egy string
+	void SendLine(const string& mit, bool final=false);// \r\n nélkül
 };
 
 // abstract class virtual callback-ekkel

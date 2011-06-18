@@ -102,6 +102,57 @@ void TSocketFrame::WriteString(const string& mit)
 
 //////////// TBufferedSocket //////////////
 
+
+TBufferedSocket::TBufferedSocket(const string& hostname,int port)
+{
+	#ifdef _WIN32
+	WSADATA data;
+	WSAStartup(MAKEWORD(2, 2), &data);
+	#endif
+
+	error=0;
+	closeaftersend=false;
+
+	hostent* he=gethostbyname(hostname.c_str());
+	if (!he)
+	{
+		#ifdef _WIN32
+		error=WSAGetLastError();
+		#else
+		error=-1337;
+		#endif
+		return;
+	}
+
+	sock=socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (!sock)
+	{
+		#ifdef _WIN32
+		error=WSAGetLastError();
+		#else
+		error=-1337;
+		#endif
+		return;
+	}
+
+	SOCKADDR_IN sockaddr;
+	sockaddr.sin_family = AF_INET;
+	sockaddr.sin_port = htons(port);
+	sockaddr.sin_addr.s_addr = *(ULONG*)he->h_addr_list[0];
+	
+	
+
+	if(connect(sock,(SOCKADDR*)&sockaddr,sizeof(sockaddr)))
+	{
+		#ifdef _WIN32
+		error=WSAGetLastError();
+		#else
+		error=-1337;
+		#endif
+	}
+}
+
+
 void TBufferedSocket::Update()
 {
  //send
@@ -180,7 +231,7 @@ bool TBufferedSocket::RecvFrame(TSocketFrame& hova)
 	return true;
 }
 
-void TBufferedSocket::SendFrame(TSocketFrame& mit,bool finalframe)
+void TBufferedSocket::SendFrame(const TSocketFrame& mit,bool finalframe)
 {
 	if (mit.cursor<=0) // má megint balfasz voltál
 		return;
@@ -200,6 +251,53 @@ void TBufferedSocket::SendFrame(TSocketFrame& mit,bool finalframe)
 	sendbuffer.insert(sendbuffer.end(),mit.data,mit.data+mit.cursor);
 }
 
+bool TBufferedSocket::RecvLine(string& hova)
+{
+	int n=recvbuffer.size();
+	if (n<2)
+		return false;
+	
+	int siz=error?n:-1;
+
+	for (int i=0;i<n-2;++i)
+		if (recvbuffer[i]==13 && recvbuffer[i+1]==10)
+		{
+			siz=i;
+			break;
+		}
+	if (siz<0)
+		return false;
+
+	hova.clear();
+	hova.append( recvbuffer.begin(),recvbuffer.begin()+siz);
+
+	if (siz+2>n)
+		siz=n-2;
+	recvbuffer.erase(recvbuffer.begin(),recvbuffer.begin()+siz+2);
+	return true;
+}
+
+const string TBufferedSocket::RecvLine2()
+{
+	string hova;
+	if (RecvLine(hova))
+		return hova;
+	else
+		return "";
+}
+
+void TBufferedSocket::SendLine(const string& mit, bool final)
+{
+	if (closeaftersend) //má volt egy final line
+		return;
+
+	if(final)
+		closeaftersend=true;
+	
+	sendbuffer.insert(sendbuffer.end(),mit.begin(),mit.end());
+	sendbuffer.insert(sendbuffer.end(),13);
+	sendbuffer.insert(sendbuffer.end(),10);
+}
 
 /////// OTHER /////////
 
