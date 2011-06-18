@@ -4,6 +4,7 @@
 #include <winsock.h>
 #else
 #include <netinet/ip.h>
+#include <netdb.h>
 typedef unsigned int ULONG;
 typedef ULONG SOCKET;
 typedef sockaddr_in SOCKADDR_IN;
