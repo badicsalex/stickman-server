@@ -23,6 +23,7 @@ void Sleep(int msec)
 {
 	usleep(msec*1000);
 }
+typedef unsigned short WORD;
 #endif
 
 
@@ -170,6 +171,7 @@ protected:
 		frame.WriteChar(hard?1:0);
 		frame.WriteString(indok);
 		sock.SendFrame(frame,true);
+		cout<<"Kicked "<<sock.context.nev<<": "<<indok<<endl;
 	}
 
 	void SendPlayerList(TMySocket& sock)
@@ -210,7 +212,6 @@ protected:
 			frame.WriteChar(sock.context.crypto[i]);
 		sock.SendFrame(frame);
 		int ip=sock.context.ip;
-		cout<<"Login OK from:"<<((ip)&0xff)<<"."<<((ip>>8)&0xff)<<"."<<((ip>>16)&0xff)<<"."<<((ip>>24)&0xff)<<endl;
 	}
 
 	void SendChat(TMySocket& sock,const string& uzenet)
@@ -253,7 +254,8 @@ protected:
 			SendKick(sock,"Protocol error: login",true);
 			return;
 		}
-		
+		int ip=sock.context.ip;
+		cout<<"Login "<<sock.context.nev<<" from "<<((ip)&0xff)<<"."<<((ip>>8)&0xff)<<"."<<((ip>>16)&0xff)<<"."<<((ip>>24)&0xff)<<endl;
 		
 		if (db.count(sock.context.nev))//regisztrált player
 		{
@@ -381,7 +383,11 @@ protected:
 			TBufferedSocket sock(config.webinterface,80);
 
 			char request[1024];
+			#ifdef _WIN32
 			sprintf_s(request,500,config.webinterfacedown.c_str(),lastUDBsuccess);
+			#else
+			sprintf(request,config.webinterfacedown.c_str(),lastUDBsuccess);			
+			#endif
 			cout<<"Download req: "<<config.webinterface<<string(request)<<endl;
 			sock.SendLine("GET "+string(request)+" HTTP/1.1");
 			sock.SendLine("Host: "+config.webinterface);
