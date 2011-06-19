@@ -26,7 +26,7 @@ class TSmartPointer
 public:
 	TSmartPointer(const Struktura* data):data(data)
 	{
-		ref_count=new int;
+		refcount=new int;
 		AddRef();
 	}
 
