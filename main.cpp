@@ -1,6 +1,7 @@
-
+#define _CRT_SECURE_NO_WARNINGS
 #include "socket_stuff.h"
 #include "crypt_stuff.h"
+#include "standard_stuff.h"
 #include <string>
 #include <set>
 #include <map>
@@ -10,6 +11,7 @@
 #include <time.h>
 #ifdef _WIN32
 #include <windows.h>
+
 #else
 #include <sys/time.h>
 int GetTickCount()
@@ -57,6 +59,7 @@ struct TStickContext{
 	/* adatok */
 	string nev;
 	string clan;
+	bool registered;
 	int fegyver;
 	int fejrevalo;
 	int UID;
@@ -266,16 +269,19 @@ protected:
 				return;
 			}
 			sock.context.clan=record.clan;
+			sock.context.registered=true;
 			SendLoginOk(sock);
 			string chatuzi="Udvozollek ujra a jatekban, "+sock.context.nev+".";
 			if(record.level)
-				chatuzi=chatuzi+" A weboldalon erkezett leveled.";//faszom sprintf() kéne megint.
+				chatuzi=chatuzi+" A weboldalon erkezett "+itoa(record.level)+" leveled.";
 			SendChat(sock,chatuzi);
 		}
 		else
 		if (jelszo.length()==0)
 		{
 			SendLoginOk(sock);
+			string chatuzi="Udvozollek a jatekban, "+sock.context.nev+". Ha tetszik a jatek, erdemes regisztralni a stickman.hu oldalon.";
+			SendChat(sock,chatuzi);
 		}
 		else
 		{
@@ -345,7 +351,19 @@ protected:
 		for(int i=0;i<n;++i)
 			if (socketek[i]->context.UID==UID &&
 				socketek[i]->context.loggedin)
+			{
 				socketek[i]->context.kills+=1;
+				if(socketek[i]->context.registered)
+				{
+					const string& nev=socketek[i]->context.nev;
+					if (killdb.count(nev))
+						killdb[nev]+=1;
+					else
+						killdb[nev]=1;
+					db[nev].napikill+=1;
+					db[nev].osszkill+=1;
+				}
+			}
 	}
 
 
@@ -357,25 +375,42 @@ protected:
 		{
 			cout<<"Uploading kills "<<killdb.size()<<" kills."<<endl;
 			TBufferedSocket sock("stickman.hu",80);
-			sock.SendLine("POST /serverinterfaceu.php?auth=telefonkozpont HTTP/1.1");
-			sock.SendLine("Host: beta.stickman.hu");
+
+			string postmsg;
+			postmsg.reserve(64*1024);
+			for(map<string,int>::iterator i=killdb.begin();i!=killdb.end();++i)
+			{
+				const string& nev=i->first;
+				postmsg+=nev+"\r\n";
+				postmsg+=itoa(i->second)+"\r\n";
+				for (set<WORD>::iterator j=db[nev].medal.begin();j!=db[nev].medal.end();++j)
+				{
+					postmsg+=((char)*j);
+					postmsg+=((char)(*j>>8));
+				}
+				postmsg+="\r\n";
+			}
+
+			sock.SendLine("POST "+config.webinterfaceup+" HTTP/1.1");
+			sock.SendLine("Host: "+config.webinterface);
 			sock.SendLine("Connection: close");
 			sock.SendLine("Content-Type: application/x-www-form-urlencoded");
+			sock.SendLine("Content-Length: "+itoa(postmsg.length()+2));
 			sock.SendLine("");
-
-			/* foreach killdb
-				sock.SendLine(nev);
-				sock.SendLine(killss);
-				sock.SendLine(medals);
-			*/
+			sock.SendLine(postmsg);
+			
 			string lin;
 			while(!sock.error)
 			{
 					sock.Update();
 					Sleep(1);
 			}
+			//!TODO
+			while(sock.RecvLine(lin))
+				cout<<lin<<endl;
 			/* while(sock.RecvLine(lin))
 				delete killdb[lin] */
+			killdb.clear();
 		}
 
 		//get db
@@ -383,11 +418,7 @@ protected:
 			TBufferedSocket sock(config.webinterface,80);
 
 			char request[1024];
-			#ifdef _WIN32
-			sprintf_s(request,500,config.webinterfacedown.c_str(),lastUDBsuccess);
-			#else
 			sprintf(request,config.webinterfacedown.c_str(),lastUDBsuccess);			
-			#endif
 			cout<<"Download req: "<<config.webinterface<<string(request)<<endl;
 			sock.SendLine("GET "+string(request)+" HTTP/1.1");
 			sock.SendLine("Host: "+config.webinterface);
@@ -437,6 +468,9 @@ protected:
 				ujrec.napikill=atoi(sock.RecvLine2().c_str());
 				ujrec.clan=sock.RecvLine2();
 				ujrec.level=atoi(sock.RecvLine2().c_str());
+				int n=medal.length();
+				for(int i=0;i<n;i+=2)
+					ujrec.medal.insert(medal[i]|(medal[i+1]<<8));
 				db[nev]=ujrec;
 			}
 		}
@@ -481,7 +515,7 @@ public:
 
 	void Update()
 	{
-		if (lastUDB<GetTickCount()-600000)
+		if (lastUDB<GetTickCount()-600000/100)
 		{
 			UpdateDb();
 			lastUDB=GetTickCount();
