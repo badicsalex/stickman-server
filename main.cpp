@@ -515,7 +515,7 @@ public:
 
 	void Update()
 	{
-		if (lastUDB<GetTickCount()-600000/100)
+		if (lastUDB<GetTickCount()-300000)//5 percenként.
 		{
 			UpdateDb();
 			lastUDB=GetTickCount();
