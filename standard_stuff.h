@@ -1,5 +1,8 @@
 #ifndef T_AND_S_H_INCLUDED
 #define T_AND_S_H_INCLUDED
+#include <stdio.h>
+#include <string>
+using namespace std;
 
 template <class Struktura>
 class TSmartPointer
@@ -61,30 +64,6 @@ public:
 	}
 };
 
-class TThread{ 
-	void* threadhandle;
-	virtual int VirtThreadFunc()=0;//absztrakt, figyeljen oda a "running"-ra.
-	static unsigned long __stdcall ThreadFunc(void* pointer);
-	TThread(TThread&);
-	TThread& operator=(TThread&);// ne másolgass köcsög, mert szétbasz a destruktorod.
-protected:
-	bool running;
-public:
-	bool IsRunning();
-	TThread();
-	~TThread();
-};
-
-class TTimer: public TThread{
-	
-	int interval;
-	virtual void OnTimer()=0;//absztrakt!
-	virtual int VirtThreadFunc();
-	TTimer(TTimer&);
-	TTimer& operator = (TTimer&);//ne másolgass.
-public:
-	TTimer(int interval):interval(interval){}
-};
-
+const string itoa(int mit);
 
 #endif
