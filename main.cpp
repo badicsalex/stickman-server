@@ -38,6 +38,7 @@ struct TConfig{
 	string webinterface;			//a webes adatbázis hostneve
 	string webinterfacedown;		//a webes adatbázis letöltõ fájljának URL-je
 	string webinterfaceup;			//aa webes adatbázis killfeltöltõ fájljának URL-je
+	string allowedchars;
 	TConfig(const string& honnan)
 	{
 		ifstream fil(honnan.c_str());
@@ -51,6 +52,7 @@ struct TConfig{
 		fil>>webinterface;
 		fil>>webinterfacedown;
 		fil>>webinterfaceup;
+		fil>>allowedchars;
 	}
 
 } config("config.cfg");
@@ -145,6 +147,12 @@ struct TStickRecord{
 	string uzenet
 */
 
+#define SERVERMSG_WEATHER 5
+/*
+	byte mire
+*/
+
+
 class StickmanServer: public TBufferedServer<TStickContext>{
 protected:
 
@@ -153,8 +161,11 @@ protected:
 
 	unsigned int lastUID;
 	unsigned int lastUDB;
+	unsigned int lastweather;
 	time_t lastUDBsuccess;
 
+	int weathermost;
+	int weathercel;
 	virtual void OnConnect(TMySocket& sock)
 	{
 		sock.context.loggedin=false;
@@ -223,6 +234,15 @@ protected:
 		frame.WriteChar(SERVERMSG_CHAT);
 		frame.WriteString(uzenet);
 		sock.SendFrame(frame);
+		
+	}
+
+	void SendWeather(TMySocket& sock,int mire)
+	{
+		TSocketFrame frame;
+		frame.WriteChar(SERVERMSG_WEATHER);
+		frame.WriteChar(mire);
+		sock.SendFrame(frame);
 	}
 
 	void OnMsgLogin(TMySocket& sock,TSocketFrame& msg)
@@ -238,12 +258,26 @@ protected:
 			SendKick(sock,"Protocol error: already logged in",true);
 			return;
 		}
-		sock.context.nev=msg.ReadString();
-		if (sock.context.nev.length()==0)
+		string& nev=sock.context.nev=msg.ReadString();
+		int n=nev.length();
+		if (n==0)
 		{
 			SendKick(sock,"Legy szives adj meg egy nevet.",true);
 			return;
 		}
+		if (n>15)
+		{
+			SendKick(sock,"A nev tul hosszu. Ami fura mert a kliens ezt alapbol nem engedi...",true);
+			return;
+		}
+		for(int i=0;i<n;++i)
+			if (config.allowedchars.find(nev[i])==string::npos)
+			{
+				SendKick(sock,"A nev meg nem engedett karaktereket tartalmaz.",true);
+				return;
+			}
+		
+
 		string jelszo=msg.ReadString();
 
 		sock.context.fegyver=msg.ReadInt();
@@ -260,28 +294,30 @@ protected:
 		int ip=sock.context.ip;
 		cout<<"Login "<<sock.context.nev<<" from "<<((ip)&0xff)<<"."<<((ip>>8)&0xff)<<"."<<((ip>>16)&0xff)<<"."<<((ip>>24)&0xff)<<endl;
 		
-		if (db.count(sock.context.nev))//regisztrált player
+		if (db.count(nev))//regisztrált player
 		{
-			TStickRecord& record=db[sock.context.nev];
+			TStickRecord& record=db[nev];
 			if (record.jelszo!=jelszo)
 			{
 				SendKick(sock,"Hibas jelszo.",false);
 				return;
 			}
-			sock.context.clan=record.clan;
+			sock.context.clan="ADMIN";//record.clan;
 			sock.context.registered=true;
 			SendLoginOk(sock);
-			string chatuzi="Udvozollek ujra a jatekban, "+sock.context.nev+".";
+			string chatuzi="\x11\x01Udvozollek ujra a jatekban, \x11\x03"+nev+"\x11\x01.";
 			if(record.level)
 				chatuzi=chatuzi+" A weboldalon erkezett "+itoa(record.level)+" leveled.";
 			SendChat(sock,chatuzi);
+			SendWeather(sock,weathermost);
 		}
 		else
 		if (jelszo.length()==0)
 		{
 			SendLoginOk(sock);
-			string chatuzi="Udvozollek a jatekban, "+sock.context.nev+". Ha tetszik a jatek, erdemes regisztralni a stickman.hu oldalon.";
+			string chatuzi="\x11\x01Udvozollek a jatekban, \x11\x03"+nev+"\x11\x01. Ha tetszik a jatek, erdemes regisztralni a stickman.hu oldalon.";
 			SendChat(sock,chatuzi);
+			SendWeather(sock,weathermost);
 		}
 		else
 		{
@@ -312,7 +348,9 @@ protected:
 			SendKick(sock,"Protocol error: chat",true);
 			return;
 		}
-		uzenet=sock.context.nev+": "+uzenet;
+		uzenet="\x11\x01"+sock.context.nev+"\x11\x03: "+uzenet;
+		if (sock.context.clan.length()>0)
+			uzenet="\x11\x10"+sock.context.clan+" "+uzenet;
 		int n=socketek.size();
 		for(int i=0;i<n;++i)
 			SendChat(*socketek[i],uzenet);
@@ -511,7 +549,8 @@ protected:
 	}
 public:
 
-	StickmanServer(int port): TBufferedServer<TStickContext>(port),lastUID(1),lastUDB(0),lastUDBsuccess(0){}
+	StickmanServer(int port): TBufferedServer<TStickContext>(port),
+		lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15){}
 
 	void Update()
 	{
@@ -520,7 +559,22 @@ public:
 			UpdateDb();
 			lastUDB=GetTickCount();
 		}
+
 		TBufferedServer<TStickContext>::Update();
+
+		if (lastweather<GetTickCount()-60000)//percenként
+		{
+			if (weathermost==weathercel)
+				weathercel=rand()%23;
+			if(weathermost>weathercel)
+				--weathermost;
+			else
+				++weathermost;
+
+			int n=socketek.size();
+			for(int i=0;i<n;++i)
+				SendWeather(*socketek[i],weathermost);
+		}
 	}
 };
 
