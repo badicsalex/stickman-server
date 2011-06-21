@@ -145,6 +145,7 @@ struct TStickRecord{
 #define SERVERMSG_CHAT 4
 /*
 	string uzenet
+	bool glyph
 */
 
 #define SERVERMSG_WEATHER 5
@@ -228,11 +229,12 @@ protected:
 		int ip=sock.context.ip;
 	}
 
-	void SendChat(TMySocket& sock,const string& uzenet)
+	void SendChat(TMySocket& sock,const string& uzenet,bool showglyph=false)
 	{
 		TSocketFrame frame;
 		frame.WriteChar(SERVERMSG_CHAT);
 		frame.WriteString(uzenet);
+		frame.WriteChar(showglyph?1:0);
 		sock.SendFrame(frame);
 		
 	}
@@ -250,7 +252,7 @@ protected:
 		int verzio=msg.ReadInt();
 		if (verzio<config.clientversion )
 		{
-			SendKick(sock,"Please update your client at http://stickman.hu to play",true);
+			SendKick(sock,"Kerlek update-eld a jatekot a  http://stickman.hu oldalon",true);
 			return;
 		}
 		if (sock.context.loggedin)
@@ -299,10 +301,13 @@ protected:
 			TStickRecord& record=db[nev];
 			if (record.jelszo!=jelszo)
 			{
-				SendKick(sock,"Hibas jelszo.",false);
+				if (record.jelszo=="regi")
+					SendKick(sock,"Kerlek ujitsd meg a regisztraciod a http://stickman.hu/ oldalon",true);
+				else
+					SendKick(sock,"Hibas jelszo.",false);
 				return;
 			}
-			sock.context.clan="ADMIN";//record.clan;
+			sock.context.clan=record.clan;
 			sock.context.registered=true;
 			SendLoginOk(sock);
 			string chatuzi="\x11\x01Udvozollek ujra a jatekban, \x11\x03"+nev+"\x11\x01.";
@@ -353,7 +358,7 @@ protected:
 			uzenet="\x11\x10"+sock.context.clan+" "+uzenet;
 		int n=socketek.size();
 		for(int i=0;i<n;++i)
-			SendChat(*socketek[i],uzenet);
+			SendChat(*socketek[i],uzenet,true);
 	}
 
 	void OnMsgKill(TMySocket& sock,TSocketFrame& msg)
@@ -400,8 +405,12 @@ protected:
 						killdb[nev]=1;
 					db[nev].napikill+=1;
 					db[nev].osszkill+=1;
+					SendChat(*socketek[i],"\x11\x01Megolted \x11\x03"+sock.context.nev+"\x11\x01-t.");
+					SendChat(sock,"\x11\x03"+nev+" \x11\x01megolt teged.");
+					break;
 				}
 			}
+		
 	}
 
 
@@ -458,7 +467,7 @@ protected:
 			char request[1024];
 			sprintf(request,config.webinterfacedown.c_str(),lastUDBsuccess);			
 			cout<<"Download req: "<<config.webinterface<<string(request)<<endl;
-			sock.SendLine("GET "+string(request)+" HTTP/1.1");
+			sock.SendLine("GET "+string(request)+" HTTP/1.0");
 			sock.SendLine("Host: "+config.webinterface);
 			sock.SendLine("Connection: close");
 			sock.SendLine("");
@@ -483,6 +492,7 @@ protected:
 			}while(headerline.length()>0);
 
 			//Feldolgozás
+			string lastname;
 			while(1)
 			{
 				string nev;
@@ -491,10 +501,10 @@ protected:
 					cout<<"Problem: nem ures sorral er veget az adas."<<endl;				
 					break;
 				}
-
 				if (nev.length()==0) //üres sor, ez jó, sikerült ápdételni
 				{
 					lastUDBsuccess=time(0);
+					
 					break;
 				}
 				string medal=sock.RecvLine2();
@@ -510,7 +520,9 @@ protected:
 				for(int i=0;i<n;i+=2)
 					ujrec.medal.insert(medal[i]|(medal[i+1]<<8));
 				db[nev]=ujrec;
+				lastname=nev;
 			}
+			cout<<"Last name: "<<lastname<<endl;
 		}
 		cout<<"Finished. "<<db.size()<<" player records."<<endl;
 	}
