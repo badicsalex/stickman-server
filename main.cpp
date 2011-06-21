@@ -71,11 +71,13 @@ struct TStickContext{
 	int checksum;
 
 	/* állapot */
+	int glyph;
 	unsigned int lastrecv;
 	unsigned int lastsend;
 	bool loggedin;
 	int x,y;
 	unsigned char crypto[20];
+	unsigned int floodtime;
 };
 
 struct TStickRecord{
@@ -145,7 +147,7 @@ struct TStickRecord{
 #define SERVERMSG_CHAT 4
 /*
 	string uzenet
-	bool glyph
+	int glyph
 */
 
 #define SERVERMSG_WEATHER 5
@@ -177,6 +179,7 @@ protected:
 		sock.context.lastsend=0;
 		sock.context.kills=0;
 		sock.context.ip=sock.address;
+		sock.context.floodtime=0;
 	}
 	
 	void SendKick(TMySocket& sock,const string& indok="Kicked without reason",bool hard=false)
@@ -229,14 +232,20 @@ protected:
 		int ip=sock.context.ip;
 	}
 
-	void SendChat(TMySocket& sock,const string& uzenet,bool showglyph=false)
+	void SendChat(TMySocket& sock,const string& uzenet,int showglyph=0)
 	{
 		TSocketFrame frame;
 		frame.WriteChar(SERVERMSG_CHAT);
 		frame.WriteString(uzenet);
-		frame.WriteChar(showglyph?1:0);
+		frame.WriteInt(showglyph);
 		sock.SendFrame(frame);
-		
+	}
+
+	void SendChatToAll(const string& uzenet,int showglyph=0)
+	{
+		int n=socketek.size();
+		for(int i=0;i<n;++i)
+			SendChat(*socketek[i],uzenet,showglyph);
 	}
 
 	void SendWeather(TMySocket& sock,int mire)
@@ -330,6 +339,15 @@ protected:
 			return;
 		}
 
+		sock.context.glyph=0;
+		n=nev.length();
+		for(int i=0;i<n;++i)
+		{
+			sock.context.glyph*=982451653;
+			sock.context.glyph+=nev[i];
+		}
+
+		sock.context.glyph*=756065179;
 		sock.context.loggedin=true;
 	}
 
@@ -345,6 +363,52 @@ protected:
 		}
 	}
 
+	void ChatCommand(TMySocket& sock,const string& command,const string& parameter)
+	{
+		/* user commandok */
+		
+		/* admin commandok */
+		if (sock.context.nev!="Admin")
+			return;
+
+		if (command=="weather")
+		{
+			weathermost=weathercel=atoi(parameter.c_str());
+			int n=socketek.size();
+			for(int i=0;i<n;++i)
+				SendWeather(*socketek[i],weathermost);
+		}else
+		if (command=="kick")
+		{
+			int kickuid=atoi(parameter.c_str());
+			int pos=parameter.find(' ');
+			string uzenet;
+			if(pos>=0)
+				uzenet.assign(parameter.begin()+pos,parameter.end());
+			else
+				uzenet="Legkozelebb ne legy balfasz.";
+			int n=socketek.size();
+			for(int i=0;i<n;++i)
+				if (socketek[i]->context.UID==kickuid)
+				{
+					SendKick(*socketek[i],"Admin kickelt: "+uzenet);
+					SendChatToAll("\x11\xe0" "Admin kickelte \x11\x03"+socketek[i]->context.nev+"\x11\xe0-t: "+uzenet);
+					break;
+				}
+		}else
+		if (command=="uid")
+		{
+			int n=socketek.size();
+			for(int i=0;i<n;++i)
+			{
+				string& nev=socketek[i]->context.nev;
+				if (nev.find(parameter)!=string::npos)
+					SendChat(sock,itoa(socketek[i]->context.UID)+" : "+nev);
+			}
+
+		}
+	}
+
 	void OnMsgChat(TMySocket& sock,TSocketFrame& msg)
 	{
 		string uzenet=msg.ReadString();
@@ -353,12 +417,44 @@ protected:
 			SendKick(sock,"Protocol error: chat",true);
 			return;
 		}
-		uzenet="\x11\x01"+sock.context.nev+"\x11\x03: "+uzenet;
-		if (sock.context.clan.length()>0)
-			uzenet="\x11\x10"+sock.context.clan+" "+uzenet;
-		int n=socketek.size();
-		for(int i=0;i<n;++i)
-			SendChat(*socketek[i],uzenet,true);
+
+		if (uzenet.length()<=1)
+			return;
+
+		//flood ellenorzes
+		if (sock.context.floodtime<GetTickCount()-12000)
+			sock.context.floodtime=GetTickCount()-10000;
+		else
+			sock.context.floodtime+=2000;
+		if (sock.context.floodtime>GetTickCount())
+		{
+			SendKick(sock,"Ne irj ennyi uzenetet egymas utan.",true);
+			return;
+		}
+
+		if (uzenet[0]=='/')
+		{
+			int pos=uzenet.find(' ');
+			if(pos>=0)
+				ChatCommand(sock, 
+				            string(uzenet.begin()+1,uzenet.begin()+pos),
+							string(uzenet.begin()+pos+1,uzenet.end()));
+			else
+				ChatCommand(sock, 
+				            string(uzenet.begin()+1,uzenet.end()),
+							"");
+		}
+		else
+		{
+			if (sock.context.nev=="Admin")
+				uzenet="\x11\xe0"+sock.context.nev+"\x11\x03: "+uzenet;
+			else
+				uzenet="\x11\x01"+sock.context.nev+"\x11\x03: "+uzenet;
+			if (sock.context.clan.length()>0)
+				uzenet="\x11\x10"+sock.context.clan+" "+uzenet;
+
+			SendChatToAll(uzenet,sock.context.glyph);
+		}
 	}
 
 	void OnMsgKill(TMySocket& sock,TSocketFrame& msg)
@@ -557,7 +653,7 @@ protected:
 		}
 		/* 10 másodperc tétlenség után kick van. */
 		if (sock.context.lastrecv<GetTickCount()-10000)
-			SendKick(sock,"Ping timeout",true);
+			SendKick(sock,"Ping timeout",false);
 	}
 public:
 
@@ -586,6 +682,7 @@ public:
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
 				SendWeather(*socketek[i],weathermost);
+			lastweather=GetTickCount();
 		}
 	}
 };
