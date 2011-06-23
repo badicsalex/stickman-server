@@ -6,7 +6,7 @@
 #include <netinet/ip.h>
 #include <netdb.h>
 typedef unsigned int ULONG;
-typedef ULONG SOCKET;
+typedef int SOCKET;
 typedef sockaddr_in SOCKADDR_IN;
 typedef sockaddr SOCKADDR;
 #define INVALID_SOCKET -1
@@ -30,8 +30,8 @@ public:
 	int datalen;
 
 	// átveszi a char* kezelését, felszabadítja destruáláskor.
-	TSocketFrame(unsigned char* data,int datalen):data(data),datalen(datalen),cursor(0){}
-	TSocketFrame():data(0),datalen(0),cursor(0){}
+	TSocketFrame(unsigned char* data,int datalen):data(data),cursor(0),datalen(datalen){}
+	TSocketFrame():data(0),cursor(0),datalen(0){}
 	~TSocketFrame(){if (data) delete[] data;}
 
 	void Reset(){cursor=0;}
@@ -58,7 +58,7 @@ public:
 	int error;// ha nem 0, gáz volt.
 	// A függvény meghívásával elfogadja a szerzõdési feltételeket
 	// miszerint teljesen lemond a socket használatáról.
-	TBufferedSocket(SOCKET sock):sock(sock), error(0), closeaftersend(false){};
+	TBufferedSocket(SOCKET sock):sock(sock), closeaftersend(false),error(0){};
 	TBufferedSocket(const string& hostname,int port);
 	~TBufferedSocket(){ closesocket(sock); }
 

@@ -53,7 +53,7 @@ int TSocketFrame::ReadInt()
 string TSocketFrame::ReadString()
 {
 	string result;
-	char hossz=ReadChar();
+	unsigned char hossz=ReadChar();
 	int tmp=cursor+hossz;
 	if (tmp<=datalen)
 	{
