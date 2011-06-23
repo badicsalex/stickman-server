@@ -14,7 +14,7 @@
 
 #else
 #include <sys/time.h>
-int GetTickCount()
+unsigned int GetTickCount()
 {
 	timespec tim;
 	clock_gettime(CLOCK_MONOTONIC,&tim);
@@ -163,12 +163,14 @@ protected:
 	map<string,int> killdb;
 
 	unsigned int lastUID;
+	
 	unsigned int lastUDB;
-	unsigned int lastweather;
 	time_t lastUDBsuccess;
-
+	
+	unsigned int lastweather;
 	int weathermost;
 	int weathercel;
+	
 	virtual void OnConnect(TMySocket& sock)
 	{
 		sock.context.loggedin=false;
@@ -229,7 +231,6 @@ protected:
 		for(int i=0;i<20;++i)
 			frame.WriteChar(sock.context.crypto[i]);
 		sock.SendFrame(frame);
-		int ip=sock.context.ip;
 	}
 
 	void SendChat(TMySocket& sock,const string& uzenet,int showglyph=0)
