@@ -447,6 +447,10 @@ protected:
 		}
 		else
 		{
+			int n=uzenet.length();
+			for(int i=0;i<n;++i)
+				if (uzenet[i]>=0 && uzenet[i]<0x20)
+					uzenet[i]=0x20;
 			if (sock.context.nev=="Admin")
 				uzenet="\x11\xe0"+sock.context.nev+"\x11\x03: "+uzenet;
 			else
