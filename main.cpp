@@ -49,7 +49,7 @@ const struct TConfig{
 		{
 			int tmp;
 			fil>>hex>>tmp;
-			sharedkey[i]=tmp;
+			sharedkey[i]=(unsigned char)tmp;
 		}
 		fil>>webinterface;
 		fil>>webinterfacedown;
@@ -186,7 +186,7 @@ protected:
 		sock.context.loggedin=false;
  		sock.context.UID=++lastUID;
 		for(int i=0;i<20;++i)
-			sock.context.crypto[i]=rand();
+			sock.context.crypto[i]=(unsigned char)rand();
 		sock.context.lastrecv=GetTickCount();
 		sock.context.lastsend=0;
 		sock.context.kills=0;
@@ -246,7 +246,6 @@ protected:
 		for(int i=0;i<20;++i)
 			frame.WriteChar(sock.context.crypto[i]);
 		sock.SendFrame(frame);
-		int ip=sock.context.ip;
 	}
 
 	void SendChat(TMySocket& sock,const string& uzenet,int showglyph=0)
@@ -269,7 +268,7 @@ protected:
 	{
 		TSocketFrame frame;
 		frame.WriteChar(SERVERMSG_WEATHER);
-		frame.WriteChar(mire);
+		frame.WriteChar((unsigned char)mire);
 		sock.SendFrame(frame);
 	}
 
@@ -484,10 +483,10 @@ protected:
 		int cn=config.csunyaszavak.size();
 		int vn=config.viragnevek.size();
 		string luzenet=uzenet;
-		tolowerstr(luzenet);
+		tolower(luzenet);
 		for (int i=0;i<cn;++i)
 		{
-			int pos=0;
+			string::size_type pos=0;
 			while ( (pos = luzenet.find(config.csunyaszavak[i], pos)) != string::npos ) {
 				uzenet.replace( pos, config.csunyaszavak[i].size(), config.viragnevek[rand()%vn] );
 				pos++;
