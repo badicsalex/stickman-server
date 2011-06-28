@@ -73,21 +73,23 @@ inline const string itoa(int mit)
 	return buffer;
 }
 
-inline void toupperstr(string& mit)
+inline void toupper(string& mit)
 {
-	transform(mit.begin(), mit.end(), mit.begin(), toupper);
+	int (*fn)(int)=toupper;
+	transform(mit.begin(), mit.end(), mit.begin(),fn);
 }
 
-inline void tolowerstr(string& mit)
+inline void tolower(string& mit)
 {
-	transform(mit.begin(), mit.end(), mit.begin(), tolower);
+	int (*fn)(int)=tolower;
+	transform(mit.begin(), mit.end(), mit.begin(), fn);
 }
 
 vector<string> explode(const string& in,const string& delim);
 
 inline void findandreplace(string& target,const string& mit,const string& mivel)
 {
-	int pos = 0;
+	string::size_type pos = 0;
     while ( (pos = target.find(mit, pos)) != string::npos ) {
         target.replace( pos, mit.size(), mivel );
         pos++;

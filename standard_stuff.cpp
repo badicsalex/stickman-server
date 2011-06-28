@@ -4,7 +4,7 @@ vector<string> explode(const string& in,const string& delim)
 {
 	const int delim_len = delim.length() ;
 	vector<string> result ;
-	int i = 0, j ;
+	string::size_type i = 0, j ;
 	for (;;)
 	{
 		j = in.find(delim, i) ;
