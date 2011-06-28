@@ -407,8 +407,9 @@ protected:
 					string& nev=socketek[i]->context.nev;
 					if (nev==kinek)
 					{
-						SendChat(*socketek[i],"\x11\xe3[From] "+sock.context.nev+": "+uzenet);
-						SendChat(sock        ,"\x11\xe3[To] "  +kinek           +": "+uzenet);
+						ChatCleanup(uzenet);
+						SendChat(*socketek[i],"\x11\xe3[From] "+sock.context.nev        +": "+uzenet,socketek[i]->context.glyph);
+						SendChat(sock        ,"\x11\xe3[To] "  +socketek[i]->context.nev+": "+uzenet,sock.context.glyph);
 						socketek[i]->context.lastwhisp=sock.context.UID;
 						break;
 					}
@@ -421,8 +422,10 @@ protected:
 			for(int i=0;i<n;++i)
 				if (socketek[i]->context.UID==sock.context.lastwhisp)
 				{
-					SendChat(*socketek[i],"\x11\xe3[From] "+sock.context.nev        +": "+parameter);
-					SendChat(sock        ,"\x11\xe3[To] "  +socketek[i]->context.nev+": "+parameter);
+					string uzenet=parameter;
+					ChatCleanup(uzenet);
+					SendChat(*socketek[i],"\x11\xe3[From] "+sock.context.nev        +": "+uzenet,socketek[i]->context.glyph);
+					SendChat(sock        ,"\x11\xe3[To] "  +socketek[i]->context.nev+": "+uzenet,sock.context.glyph);
 					socketek[i]->context.lastwhisp=sock.context.UID;
 					break;
 				}
@@ -555,7 +558,10 @@ protected:
 			if (sock.context.clan.length()>0)
 				uzenet="\x11\x10"+sock.context.clan+" "+uzenet;
 
-			SendChatToAll(uzenet,sock.context.glyph);
+			int n=socketek.size();
+			for(int i=0;i<n;++i)
+				if (socketek[i]->context.realm==sock.context.realm)
+					SendChat(*socketek[i],uzenet,sock.context.glyph);
 		}
 	}
 
