@@ -14,7 +14,7 @@
 
 #else
 #include <sys/time.h>
-unsigned int GetTickCount()
+int GetTickCount()
 {
 	timespec tim;
 	clock_gettime(CLOCK_MONOTONIC,&tim);
@@ -32,13 +32,15 @@ typedef unsigned short WORD;
 using namespace std;
 
 
-struct TConfig{
+const struct TConfig{
 	int clientversion;				//kliens verzió, ez alatt kickel
 	unsigned char sharedkey[20];	//a killenkénti kriptográfiai aláírás kulcsa
 	string webinterface;			//a webes adatbázis hostneve
 	string webinterfacedown;		//a webes adatbázis letöltõ fájljának URL-je
 	string webinterfaceup;			//aa webes adatbázis killfeltöltõ fájljának URL-je
-	string allowedchars;
+	string allowedchars;			//névben megengedett karakterek
+	vector<string> csunyaszavak;	//cenzúrázandó szavak
+	vector<string> viragnevek;		//amivel lecseréljük a cenzúrázandó szavakat.
 	TConfig(const string& honnan)
 	{
 		ifstream fil(honnan.c_str());
@@ -53,6 +55,14 @@ struct TConfig{
 		fil>>webinterfacedown;
 		fil>>webinterfaceup;
 		fil>>allowedchars;
+
+		string tmpstr;
+
+		fil>>tmpstr; 
+		csunyaszavak=explode(tmpstr,",");
+
+		fil>>tmpstr; 
+		viragnevek=explode(tmpstr,",");
 	}
 
 } config("config.cfg");
@@ -78,6 +88,8 @@ struct TStickContext{
 	int x,y;
 	unsigned char crypto[20];
 	unsigned int floodtime;
+	string realm;
+	int lastwhisp;
 };
 
 struct TStickRecord{
@@ -163,14 +175,12 @@ protected:
 	map<string,int> killdb;
 
 	unsigned int lastUID;
-	
 	unsigned int lastUDB;
-	time_t lastUDBsuccess;
-	
 	unsigned int lastweather;
+	time_t lastUDBsuccess;
+
 	int weathermost;
 	int weathercel;
-	
 	virtual void OnConnect(TMySocket& sock)
 	{
 		sock.context.loggedin=false;
@@ -199,9 +209,14 @@ protected:
 		TSocketFrame frame;
 		frame.WriteChar(SERVERMSG_PLAYERLIST);
 		int n=socketek.size();
-		frame.WriteInt(n);
+		int n2=0;
+		for(int i=0;i<n;++i)
+			if(sock.context.realm==socketek[i]->context.realm)
+				++n2;
+		frame.WriteInt(n2);
 		/*!TODO legközelebbi 50 kiválasztása */
 		for(int i=0;i<n;++i)
+		if(sock.context.realm==socketek[i]->context.realm)
 		{
 			TStickContext& scontext=socketek[i]->context;
 			frame.WriteChar((unsigned char)(scontext.ip));
@@ -231,6 +246,7 @@ protected:
 		for(int i=0;i<20;++i)
 			frame.WriteChar(sock.context.crypto[i]);
 		sock.SendFrame(frame);
+		int ip=sock.context.ip;
 	}
 
 	void SendChat(TMySocket& sock,const string& uzenet,int showglyph=0)
@@ -262,7 +278,7 @@ protected:
 		int verzio=msg.ReadInt();
 		if (verzio<config.clientversion )
 		{
-			SendKick(sock,"Kerlek update-eld a jatekot a  http://stickman.hu oldalon",true);
+			SendKick(sock,"Kérlek update-eld a játékot a  http://stickman.hu oldalon",true);
 			return;
 		}
 		if (sock.context.loggedin)
@@ -274,18 +290,18 @@ protected:
 		int n=nev.length();
 		if (n==0)
 		{
-			SendKick(sock,"Legy szives adj meg egy nevet.",true);
+			SendKick(sock,"Légy szíves adj meg egy nevet.",true);
 			return;
 		}
 		if (n>15)
 		{
-			SendKick(sock,"A nev tul hosszu. Ami fura mert a kliens ezt alapbol nem engedi...",true);
+			SendKick(sock,"A név túl hosszú. Ami fura, mert a kliens ezt alapbol nem engedi...",true);
 			return;
 		}
 		for(int i=0;i<n;++i)
 			if (config.allowedchars.find(nev[i])==string::npos)
 			{
-				SendKick(sock,"A nev meg nem engedett karaktereket tartalmaz.",true);
+				SendKick(sock,"A név meg nem engedett karaktereket tartalmaz.",true);
 				return;
 			}
 		
@@ -312,17 +328,17 @@ protected:
 			if (record.jelszo!=jelszo)
 			{
 				if (record.jelszo=="regi")
-					SendKick(sock,"Kerlek ujitsd meg a regisztraciod a http://stickman.hu/ oldalon",true);
+					SendKick(sock,"Kérlek újítsd meg a regisztrációd a http://stickman.hu/ oldalon",true);
 				else
-					SendKick(sock,"Hibas jelszo.",false);
+					SendKick(sock,"Hibás jelszó.",false);
 				return;
 			}
 			sock.context.clan=record.clan;
 			sock.context.registered=true;
 			SendLoginOk(sock);
-			string chatuzi="\x11\x01Udvozollek ujra a jatekban, \x11\x03"+nev+"\x11\x01.";
+			string chatuzi="\x11\x01Üdvözöllek újra a játékban, \x11\x03"+nev+"\x11\x01.";
 			if(record.level)
-				chatuzi=chatuzi+" A weboldalon erkezett "+itoa(record.level)+" leveled.";
+				chatuzi=chatuzi+" A weboldalon érkezett "+itoa(record.level)+" leveled.";
 			SendChat(sock,chatuzi);
 			SendWeather(sock,weathermost);
 		}
@@ -330,13 +346,13 @@ protected:
 		if (jelszo.length()==0)
 		{
 			SendLoginOk(sock);
-			string chatuzi="\x11\x01Udvozollek a jatekban, \x11\x03"+nev+"\x11\x01. Ha tetszik a jatek, erdemes regisztralni a stickman.hu oldalon.";
+			string chatuzi="\x11\x01Üdvözöllek a játékban, \x11\x03"+nev+"\x11\x01. Ha tetszik, érdemes regisztrálni a stickman.hu oldalon.";
 			SendChat(sock,chatuzi);
 			SendWeather(sock,weathermost);
 		}
 		else
 		{
-			SendKick(sock,"Ez a nev nincs regisztralva, igy jelszo nelkul lehet csak hasznalni.",false);
+			SendKick(sock,"Ez a név nincs regisztrálva, így jelszó nélkül lehet csak használni.",false);
 			return;
 		}
 
@@ -367,7 +383,52 @@ protected:
 	void ChatCommand(TMySocket& sock,const string& command,const string& parameter)
 	{
 		/* user commandok */
-		
+
+		if (command=="realm" && parameter.size()>0)
+		{
+			sock.context.realm=parameter;
+			SendChat(sock,"Mostantól a "+parameter+" realmon játszol. A killjeid nem számítanak a toplistába");
+		}else
+		if (command=="norealm" || command=="realm" && parameter.size()==0)
+		{
+			sock.context.realm="";
+			SendChat(sock,"Visszaléptél a fõ realmba. A killjeid ismét számítanak.");
+		}else
+		if (command=="w" || command=="whisper")
+		{
+			int pos=parameter.find(' ');
+			if(pos>=0)
+			{
+				int n=socketek.size();
+				string kinek(parameter.begin(),parameter.begin()+pos);
+				string uzenet(parameter.begin()+pos+1,parameter.end());
+				for(int i=0;i<n;++i)
+				{
+					string& nev=socketek[i]->context.nev;
+					if (nev==kinek)
+					{
+						SendChat(*socketek[i],"\x11\xe3[From] "+sock.context.nev+": "+uzenet);
+						SendChat(sock        ,"\x11\xe3[To] "  +kinek           +": "+uzenet);
+						socketek[i]->context.lastwhisp=sock.context.UID;
+						break;
+					}
+				}
+			}
+		}else
+		if(command=="r" || command=="reply")
+		{
+			int n=socketek.size();
+			for(int i=0;i<n;++i)
+				if (socketek[i]->context.UID==sock.context.lastwhisp)
+				{
+					SendChat(*socketek[i],"\x11\xe3[From] "+sock.context.nev        +": "+parameter);
+					SendChat(sock        ,"\x11\xe3[To] "  +socketek[i]->context.nev+": "+parameter);
+					socketek[i]->context.lastwhisp=sock.context.UID;
+					break;
+				}
+		}
+
+
 		/* admin commandok */
 		if (sock.context.nev!="Admin")
 			return;
@@ -410,6 +471,45 @@ protected:
 		}
 	}
 
+	void ChatCleanup(string& uzenet)
+	{
+		int n=uzenet.length();
+		for(int i=0;i<n;++i)
+			if (uzenet[i]>=0 && uzenet[i]<0x20)
+				uzenet[i]=0x20;
+
+		int cn=config.csunyaszavak.size();
+		int vn=config.viragnevek.size();
+		string luzenet=uzenet;
+		tolowerstr(luzenet);
+		for (int i=0;i<cn;++i)
+		{
+			int pos=0;
+			while ( (pos = luzenet.find(config.csunyaszavak[i], pos)) != string::npos ) {
+				uzenet.replace( pos, config.csunyaszavak[i].size(), config.viragnevek[rand()%vn] );
+				pos++;
+			}
+		}
+
+		char elobb=0;
+		int cnt=0;
+		unsigned int i=0;
+		while(i<uzenet.size())
+		{
+			if (uzenet[i]==elobb)
+				++cnt;
+			else
+			{
+				elobb=uzenet[i];
+				cnt=0;
+			}
+			if (cnt>3)
+				uzenet.erase(i,1);
+			else
+				++i;
+		}
+	}
+
 	void OnMsgChat(TMySocket& sock,TSocketFrame& msg)
 	{
 		string uzenet=msg.ReadString();
@@ -429,7 +529,7 @@ protected:
 			sock.context.floodtime+=2000;
 		if (sock.context.floodtime>GetTickCount())
 		{
-			SendKick(sock,"Ne irj ennyi uzenetet egymas utan.",true);
+			SendKick(sock,"Ne írj ennyi üzenetet egymás után.",true);
 			return;
 		}
 
@@ -447,10 +547,7 @@ protected:
 		}
 		else
 		{
-			int n=uzenet.length();
-			for(int i=0;i<n;++i)
-				if (uzenet[i]>=0 && uzenet[i]<0x20)
-					uzenet[i]=0x20;
+			ChatCleanup(uzenet);
 			if (sock.context.nev=="Admin")
 				uzenet="\x11\xe0"+sock.context.nev+"\x11\x03: "+uzenet;
 			else
@@ -500,14 +597,17 @@ protected:
 				if(socketek[i]->context.registered)
 				{
 					const string& nev=socketek[i]->context.nev;
-					if (killdb.count(nev))
-						killdb[nev]+=1;
-					else
-						killdb[nev]=1;
-					db[nev].napikill+=1;
-					db[nev].osszkill+=1;
-					SendChat(*socketek[i],"\x11\x01Megolted \x11\x03"+sock.context.nev+"\x11\x01-t.");
-					SendChat(sock,"\x11\x03"+nev+" \x11\x01megolt teged.");
+					if (socketek[i]->context.realm.size()==0)
+					{
+						if (killdb.count(nev))
+							killdb[nev]+=1;
+						else
+							killdb[nev]=1;
+						db[nev].napikill+=1;
+						db[nev].osszkill+=1;
+					}
+					SendChat(*socketek[i],"\x11\x01Megölted \x11\x03"+sock.context.nev+"\x11\x01-t.");
+					SendChat(sock,"\x11\x03"+nev+" \x11\x01megölt téged.");
 					break;
 				}
 			}
