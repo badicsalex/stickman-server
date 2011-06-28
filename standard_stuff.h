@@ -2,6 +2,8 @@
 #define T_AND_S_H_INCLUDED
 #include <stdio.h>
 #include <string>
+#include <vector>
+#include <algorithm>
 using namespace std;
 
 template <class Struktura>
@@ -64,6 +66,31 @@ public:
 	}
 };
 
-const string itoa(int mit);
+inline const string itoa(int mit)
+{
+	char buffer[50];
+	sprintf(buffer,"%d",mit);
+	return buffer;
+}
 
+inline void toupperstr(string& mit)
+{
+	transform(mit.begin(), mit.end(), mit.begin(), toupper);
+}
+
+inline void tolowerstr(string& mit)
+{
+	transform(mit.begin(), mit.end(), mit.begin(), tolower);
+}
+
+vector<string> explode(const string& in,const string& delim);
+
+inline void findandreplace(string& target,const string& mit,const string& mivel)
+{
+	int pos = 0;
+    while ( (pos = target.find(mit, pos)) != string::npos ) {
+        target.replace( pos, mit.size(), mivel );
+        pos++;
+    }
+}
 #endif
