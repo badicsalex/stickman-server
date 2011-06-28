@@ -388,7 +388,7 @@ protected:
 			sock.context.realm=parameter;
 			SendChat(sock,"Mostantól a "+parameter+" realmon játszol. A killjeid nem számítanak a toplistába");
 		}else
-		if (command=="norealm" || command=="realm" && parameter.size()==0)
+		if (command=="norealm" || (command=="realm" && parameter.size()==0))
 		{
 			sock.context.realm="";
 			SendChat(sock,"Visszaléptél a fõ realmba. A killjeid ismét számítanak.");
@@ -428,8 +428,17 @@ protected:
 					socketek[i]->context.lastwhisp=sock.context.UID;
 					break;
 				}
+		}else
+		if((command=="c" || command=="clan") && sock.context.clan.size()>0)
+		{
+			string uzenet=parameter;
+			ChatCleanup(uzenet);
+			uzenet="\x11\x10"+sock.context.clan+" "+sock.context.nev+": "+uzenet;
+			int n=socketek.size();
+			for(int i=0;i<n;++i)
+				if (socketek[i]->context.clan==sock.context.clan)
+					SendChat(*socketek[i],uzenet,sock.context.glyph);
 		}
-
 
 		/* admin commandok */
 		if (sock.context.nev!="Admin")
