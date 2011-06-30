@@ -298,7 +298,7 @@ protected:
 	void OnMsgLogin(TMySocket& sock,TSocketFrame& msg)
 	{
 		int verzio=msg.ReadInt();
-		int nyelv=msg.ReadInt();
+		int nyelv=sock.context.nyelv=msg.ReadInt();
 
 		if (!lang.HasLang(nyelv))
 			nyelv=0;
