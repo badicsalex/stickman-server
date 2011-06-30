@@ -79,11 +79,15 @@ struct TStickContext{
 	unsigned short port;
 	int kills; //mai napon
 	int checksum;
+	int nyelv;
 
 	/* állapot */
 	int glyph;
-	unsigned int lastrecv;
-	unsigned int lastsend;
+	unsigned int lastrecv; //utolsó fogadott csomag
+	unsigned int lastsend; //utolsó küldött playerlista
+	unsigned int lastudpquery; //utolsó kérés hogy kliens küldjön UDP-t
+	bool gotudp; //kaptunk UDP csomagot a port javításhoz.
+	int udpauth;
 	bool loggedin;
 	int x,y;
 	unsigned char crypto[20];
@@ -105,6 +109,7 @@ struct TStickRecord{
 #define CLIENTMSG_LOGIN 1
 /*	Login üzenet. Erre válasz: LOGINOK, vagy KICK
 	int kliens_verzió
+	int nyelv
 	string név
 	string jelszó
 	int fegyver
@@ -167,9 +172,15 @@ struct TStickRecord{
 	byte mire
 */
 
+#define SERVERMSG_SENDUDP 6
+/*
+  int auth
+*/
 
 class StickmanServer: public TBufferedServer<TStickContext>{
 protected:
+	const TSimpleLang lang;
+	TUDPSocket udp;
 
 	map<string,TStickRecord> db;
 	map<string,int> killdb;
@@ -189,9 +200,13 @@ protected:
 			sock.context.crypto[i]=(unsigned char)rand();
 		sock.context.lastrecv=GetTickCount();
 		sock.context.lastsend=0;
+		sock.context.lastudpquery=0; //utolsó kérés hogy kliens küldjön UDP-t
+		sock.context.gotudp=false; //ennyit várunk a következõ kérésig
 		sock.context.kills=0;
 		sock.context.ip=sock.address;
 		sock.context.floodtime=0;
+		sock.context.udpauth=rand();
+		sock.context.nyelv=0;
 	}
 	
 	void SendKick(TMySocket& sock,const string& indok="Kicked without reason",bool hard=false)
@@ -272,35 +287,48 @@ protected:
 		sock.SendFrame(frame);
 	}
 
+	void SendUdpQuery(TMySocket& sock)
+	{
+		TSocketFrame frame;
+		frame.WriteChar(SERVERMSG_SENDUDP);
+		frame.WriteInt(sock.context.udpauth);
+		sock.SendFrame(frame);
+	}
+
 	void OnMsgLogin(TMySocket& sock,TSocketFrame& msg)
 	{
 		int verzio=msg.ReadInt();
+		int nyelv=msg.ReadInt();
+
+		if (!lang.HasLang(nyelv))
+			nyelv=0;
+
 		if (verzio<config.clientversion )
 		{
-			SendKick(sock,"Kérlek update-eld a játékot a  http://stickman.hu oldalon",true);
+			SendKick(sock,lang(nyelv,1),true);
 			return;
 		}
 		if (sock.context.loggedin)
 		{
-			SendKick(sock,"Protocol error: already logged in",true);
+			SendKick(sock,lang(nyelv,2),true);
 			return;
 		}
 		string& nev=sock.context.nev=msg.ReadString();
 		int n=nev.length();
 		if (n==0)
 		{
-			SendKick(sock,"Légy szíves adj meg egy nevet.",true);
+			SendKick(sock,lang(nyelv,3),false);
 			return;
 		}
 		if (n>15)
 		{
-			SendKick(sock,"A név túl hosszú. Ami fura, mert a kliens ezt alapbol nem engedi...",true);
+			SendKick(sock,lang(nyelv,4),false);
 			return;
 		}
 		for(int i=0;i<n;++i)
 			if (config.allowedchars.find(nev[i])==string::npos)
 			{
-				SendKick(sock,"A név meg nem engedett karaktereket tartalmaz.",true);
+				SendKick(sock,lang(nyelv,5),false);
 				return;
 			}
 		
@@ -315,7 +343,7 @@ protected:
 		sock.context.checksum=msg.ReadInt();
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
 		{
-			SendKick(sock,"Protocol error: login",true);
+			SendKick(sock,lang(nyelv,6),true);
 			return;
 		}
 		int ip=sock.context.ip;
@@ -326,18 +354,15 @@ protected:
 			TStickRecord& record=db[nev];
 			if (record.jelszo!=jelszo)
 			{
-				if (record.jelszo=="regi")
-					SendKick(sock,"Kérlek újítsd meg a regisztrációd a http://stickman.hu/ oldalon",true);
-				else
-					SendKick(sock,"Hibás jelszó.",false);
+				SendKick(sock,lang(nyelv,7),false);
 				return;
 			}
 			sock.context.clan=record.clan;
 			sock.context.registered=true;
 			SendLoginOk(sock);
-			string chatuzi="\x11\x01Üdvözöllek újra a játékban, \x11\x03"+nev+"\x11\x01.";
+			string chatuzi="\x11\x01"+lang(nyelv,8)+"\x11\x03"+nev+"\x11\x01"+lang(nyelv,9);
 			if(record.level)
-				chatuzi=chatuzi+" A weboldalon érkezett "+itoa(record.level)+" leveled.";
+				chatuzi=chatuzi+lang(nyelv,10)+itoa(record.level)+lang(nyelv,11);
 			SendChat(sock,chatuzi);
 			SendWeather(sock,weathermost);
 		}
@@ -345,13 +370,13 @@ protected:
 		if (jelszo.length()==0)
 		{
 			SendLoginOk(sock);
-			string chatuzi="\x11\x01Üdvözöllek a játékban, \x11\x03"+nev+"\x11\x01. Ha tetszik, érdemes regisztrálni a stickman.hu oldalon.";
+			string chatuzi="\x11\x01"+lang(nyelv,12)+"\x11\x03"+nev+"\x11\x01"+lang(nyelv,13);
 			SendChat(sock,chatuzi);
 			SendWeather(sock,weathermost);
 		}
 		else
 		{
-			SendKick(sock,"Ez a név nincs regisztrálva, így jelszó nélkül lehet csak használni.",false);
+			SendKick(sock,lang(nyelv,14),false);
 			return;
 		}
 
@@ -374,7 +399,7 @@ protected:
 
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
 		{
-			SendKick(sock,"Protocol error: status",true);
+			SendKick(sock,lang(sock.context.nyelv,15),true);
 			return;
 		}
 	}
@@ -386,12 +411,12 @@ protected:
 		if (command=="realm" && parameter.size()>0)
 		{
 			sock.context.realm=parameter;
-			SendChat(sock,"Mostantól a "+parameter+" realmon játszol. A killjeid nem számítanak a toplistába");
+			SendChat(sock,lang(sock.context.nyelv,16)+parameter+lang(sock.context.nyelv,17));
 		}else
 		if (command=="norealm" || (command=="realm" && parameter.size()==0))
 		{
 			sock.context.realm="";
-			SendChat(sock,"Visszaléptél a fõ realmba. A killjeid ismét számítanak.");
+			SendChat(sock,lang(sock.context.nyelv,18));
 		}else
 		if (command=="w" || command=="whisper")
 		{
@@ -459,13 +484,14 @@ protected:
 			if(pos>=0)
 				uzenet.assign(parameter.begin()+pos,parameter.end());
 			else
-				uzenet="Legkozelebb ne legy balfasz.";
+				uzenet=lang(sock.context.nyelv,19); //lol lang specifikus default kick
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
 				if (socketek[i]->context.UID==kickuid)
 				{
-					SendKick(*socketek[i],"Admin kickelt: "+uzenet);
-					SendChatToAll("\x11\xe0" "Admin kickelte \x11\x03"+socketek[i]->context.nev+"\x11\xe0-t: "+uzenet);
+					SendKick(*socketek[i],lang(sock.context.nyelv,20)+uzenet);
+					SendChatToAll("\x11\xe0"+lang(sock.context.nyelv,21)+"\x11\x03"+
+								  socketek[i]->context.nev+"\x11\xe0"+lang(sock.context.nyelv,22)+uzenet);
 					break;
 				}
 		}else
@@ -526,7 +552,7 @@ protected:
 		string uzenet=msg.ReadString();
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
 		{
-			SendKick(sock,"Protocol error: chat",true);
+			SendKick(sock,lang(sock.context.nyelv,23),true);
 			return;
 		}
 
@@ -540,7 +566,7 @@ protected:
 			sock.context.floodtime+=2000;
 		if (sock.context.floodtime>GetTickCount())
 		{
-			SendKick(sock,"Ne írj ennyi üzenetet egymás után.",true);
+			SendKick(sock,lang(sock.context.nyelv,24),true);
 			return;
 		}
 
@@ -591,14 +617,14 @@ protected:
 		for(int i=0;i<20;++i)
 			if (sock.context.crypto[i]!=msg.ReadChar())
 			{
-				SendKick(sock,"Protocol error: kill verification",true);
+				SendKick(sock,lang(sock.context.nyelv,25),true);
 				return;
 			}
 		
 
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
 		{
-			SendKick(sock,"Protocol error: kill",true);
+			SendKick(sock,lang(sock.context.nyelv,26),true);
 			return;
 		}
 
@@ -620,8 +646,8 @@ protected:
 						db[nev].napikill+=1;
 						db[nev].osszkill+=1;
 					}
-					SendChat(*socketek[i],"\x11\x01Megölted \x11\x03"+sock.context.nev+"\x11\x01-t.");
-					SendChat(sock,"\x11\x03"+nev+" \x11\x01megölt téged.");
+					SendChat(*socketek[i],"\x11\x01"+lang(socketek[i]->context.nyelv,27)+"\x11\x03"+sock.context.nev+"\x11\x01"+lang(socketek[i]->context.nyelv,28));
+					SendChat(sock,"\x11\x01"+lang(sock.context.nyelv,29)+"\x11\x03"+nev+" \x11\x01"+lang(sock.context.nyelv,30));
 					break;
 				}
 			}
@@ -749,7 +775,7 @@ protected:
 		{
 			char type=recvd.ReadChar();
 			if (!sock.context.loggedin && type!=CLIENTMSG_LOGIN)
-				SendKick(sock,"Protocol error: not logged in",true);
+				SendKick(sock,lang(sock.context.nyelv,31),true);
 			else
 			switch(type)
 			{
@@ -758,29 +784,60 @@ protected:
 				case CLIENTMSG_CHAT:	OnMsgChat(sock,recvd); break;
 				case CLIENTMSG_KILLED:	OnMsgKill(sock,recvd); break;
 				default:
-					SendKick(sock,"Protocol error: unknown packet type",true);
+					SendKick(sock,lang(sock.context.nyelv,32),true);
 			}
 			sock.context.lastrecv=GetTickCount();
 		}
 
+		unsigned int gtc=GetTickCount();
 		/* 2000-2500 msenként küldünk playerlistát */
 		if (sock.context.loggedin &&
-			sock.context.lastsend<GetTickCount()-2000-(rand()&511))
+			sock.context.lastsend<gtc-2000-(rand()&511))
 		{
 			SendPlayerList(sock);
-			sock.context.lastsend=GetTickCount();
+			sock.context.lastsend=gtc;
+		}
+		/* fél másodpercenként kérünk UDP-t ha nem jött még*/
+		if (sock.context.loggedin &&
+			sock.context.lastudpquery<gtc-500)
+		{
+			SendUdpQuery(sock);
+			sock.context.lastudpquery=gtc;
 		}
 		/* 10 másodperc tétlenség után kick van. */
-		if (sock.context.lastrecv<GetTickCount()-10000)
-			SendKick(sock,"Ping timeout",false);
+		if (sock.context.lastrecv<gtc-10000)
+			SendKick(sock,lang(sock.context.nyelv,33),false);
+
 	}
 public:
 
-	StickmanServer(int port): TBufferedServer<TStickContext>(port),
-		lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15){}
+	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
+		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15){}
 
 	void Update()
 	{
+		TSocketFrame frame;
+		DWORD fromip;
+		WORD fromport;
+		while(udp.Recv(frame,fromip,fromport))
+		{
+			int n=socketek.size();
+			int stck=frame.ReadInt();
+			if (stck!=('S'|('T'<<8)|('C'<<16)|('K'<<24)))
+				continue;
+
+			int uid=frame.ReadInt();
+			int auth=frame.ReadInt();
+			for(int i=0;i<n;++i)
+				if (!socketek[i]->context.gotudp &&
+					 socketek[i]->context.UID==uid && 
+					 socketek[i]->context.udpauth==auth)
+				{
+					socketek[i]->context.port=fromport; //hopp, hazudott a portjáról talán.
+					socketek[i]->context.gotudp=true;
+				}
+		}
+
 		if (lastUDB<GetTickCount()-300000)//5 percenként.
 		{
 			UpdateDb();
@@ -800,7 +857,8 @@ public:
 
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
-				SendWeather(*socketek[i],weathermost);
+				if (socketek[i]->context.loggedin)
+					SendWeather(*socketek[i],weathermost);
 			lastweather=GetTickCount();
 		}
 	}
