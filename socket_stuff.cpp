@@ -70,6 +70,14 @@ void TSocketFrame::WriteChar(unsigned char mit)
 	cursor+=1;
 }
 
+void TSocketFrame::WriteBytes(unsigned char* mit, int n)
+{
+	EnlargeBuffer(cursor+n);
+	for (int i=0;i<n;++i)
+		data[cursor+i]=mit[i];
+	cursor+=n;
+}
+
 void TSocketFrame::WriteWord(unsigned int mit)
 {
 	EnlargeBuffer(cursor+2);
@@ -298,6 +306,54 @@ void TBufferedSocket::SendLine(const string& mit, bool final)
 	sendbuffer.insert(sendbuffer.end(),13);
 	sendbuffer.insert(sendbuffer.end(),10);
 }
+
+
+////////////TUDPSocket/////////
+
+TUDPSocket::TUDPSocket(int port)
+{
+	sock=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (!sock)
+	{
+		#ifdef _WIN32
+		error=WSAGetLastError();
+		#else
+		error=-1337;
+		#endif
+		return;
+	}
+
+	SOCKADDR_IN sockaddr;
+	sockaddr.sin_family = AF_INET;
+	sockaddr.sin_port = htons(port);
+	sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	if(bind(sock,(SOCKADDR*)&sockaddr,sizeof(sockaddr)))
+	{
+		#ifdef _WIN32
+		error=WSAGetLastError();
+		#else
+		error=-1337;
+		#endif
+	}
+}
+
+bool TUDPSocket::Recv(TSocketFrame& hova, DWORD& ip, WORD& port)
+{
+	if (!SelectForRead(sock))
+		return false;
+
+	unsigned char buffer[1600];
+	SOCKADDR_IN from={};
+	int frlen=sizeof(from);
+	int n=recvfrom(sock,(char*)buffer,1600,0,(SOCKADDR*)&from,&frlen);
+	hova.cursor=0;
+	hova.WriteBytes(buffer,n);
+	hova.cursor=0;
+	ip=from.sin_addr.S_un.S_addr;
+	port=ntohs(from.sin_port);
+	return true;
+}
+
 
 /////// OTHER /////////
 

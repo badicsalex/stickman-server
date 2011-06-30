@@ -66,6 +66,27 @@ public:
 	}
 };
 
+class TSimpleLang {
+	vector<vector<string>> data; //ne legyen túl magas ID-je a langnak :P
+	TSimpleLang(TSimpleLang&);
+	TSimpleLang& operator=(TSimpleLang&);
+	static const string err;
+public:
+	TSimpleLang(const string& langfile);
+	bool HasLang(int id) const
+	{
+		return id>=0 && (int)data.size()>id && data[id].size()>0;
+	}
+	const string& operator()(int langid,int stringid) const
+	{
+		if (langid<0 || (int)data.size()<=langid)
+			return err;
+		if (stringid<0 || (int)data[langid].size()<=stringid)
+			return err;
+		return data[langid][stringid];
+	}
+};
+
 inline const string itoa(int mit)
 {
 	char buffer[50];

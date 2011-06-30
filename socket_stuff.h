@@ -40,6 +40,7 @@ public:
 	int ReadInt();
 	string ReadString();
 	void WriteChar(unsigned char mit);
+	void WriteBytes(unsigned char* mit, int n);
 	void WriteWord(unsigned int mit);
 	void WriteInt(int mit);
 	void WriteString(const string& mit);
@@ -93,6 +94,18 @@ public:
 	
 	void Update();
 };
+
+class TUDPSocket{
+    SOCKET sock;
+public:
+    int error;
+    TUDPSocket(int port);
+    ~TUDPSocket() { closesocket(sock); };
+    bool Recv(TSocketFrame& hova, DWORD& ip, WORD& port);
+	//majd implementálom ha szükség lesz rá.
+    //void Send(const TSocketFrame& mit, DWORD ip:DWORD, WORD port); 
+};
+
 
 int SelectForRead(SOCKET sock);
 int SelectForWrite(SOCKET sock);
