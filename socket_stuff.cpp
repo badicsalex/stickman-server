@@ -345,11 +345,11 @@ bool TUDPSocket::Recv(TSocketFrame& hova, DWORD& ip, WORD& port)
 	unsigned char buffer[1600];
 	SOCKADDR_IN from={};
 	int frlen=sizeof(from);
-	int n=recvfrom(sock,(char*)buffer,1600,0,(SOCKADDR*)&from,&frlen);
+	int n=recvfrom(sock,(char*)buffer,1600,0,(SOCKADDR*)&from,(socklen_t*)&frlen);
 	hova.cursor=0;
 	hova.WriteBytes(buffer,n);
 	hova.cursor=0;
-	ip=from.sin_addr.S_un.S_addr;
+	ip=from.sin_addr.s_addr;
 	port=ntohs(from.sin_port);
 	return true;
 }

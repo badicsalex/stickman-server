@@ -9,6 +9,8 @@ typedef unsigned int ULONG;
 typedef int SOCKET;
 typedef sockaddr_in SOCKADDR_IN;
 typedef sockaddr SOCKADDR;
+typedef unsigned int DWORD;
+typedef short unsigned int WORD;
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
 #define closesocket close

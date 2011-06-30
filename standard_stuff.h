@@ -67,7 +67,7 @@ public:
 };
 
 class TSimpleLang {
-	vector<vector<string>> data; //ne legyen túl magas ID-je a langnak :P
+	vector< vector< string > > data; //ne legyen túl magas ID-je a langnak :P
 	TSimpleLang(TSimpleLang&);
 	TSimpleLang& operator=(TSimpleLang&);
 	static const string err;
