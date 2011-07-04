@@ -13,7 +13,11 @@
 #include <windows.h>
 
 #else
+//mi a fasznak van egyatalan SIGPIPE?! Az eszem megall.
+#include <signal.h>
+
 #include <sys/time.h>
+
 int GetTickCount()
 {
 	timespec tim;
@@ -26,6 +30,8 @@ void Sleep(int msec)
 	usleep(msec*1000);
 }
 typedef unsigned short WORD;
+
+
 #endif
 
 
@@ -866,6 +872,9 @@ public:
 
 
 int main(){
+	#ifndef _WIN32
+	signal(SIGPIPE, SIG_IGN);
+	#endif
 	cout<<"Stickserver starting..."<<endl;
 	{
 		StickmanServer server(25252);
