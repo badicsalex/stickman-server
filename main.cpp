@@ -191,6 +191,8 @@ protected:
 	map<string,TStickRecord> db;
 	map<string,int> killdb;
 
+	map<string,string> bans;
+
 	unsigned int lastUID;
 	unsigned int lastUDB;
 	unsigned int lastweather;
@@ -355,6 +357,18 @@ protected:
 		int ip=sock.context.ip;
 		cout<<"Login "<<sock.context.nev<<" from "<<((ip)&0xff)<<"."<<((ip>>8)&0xff)<<"."<<((ip>>16)&0xff)<<"."<<((ip>>24)&0xff)<<endl;
 		
+		if(bans.count(nev))
+		{
+				SendKick(sock,lang(nyelv,34)+bans[nev],false);
+				return;
+		}
+
+		if(bans.count(itoa(ip)))
+		{
+				SendKick(sock,lang(nyelv,34)+bans[itoa(ip)],false);
+				return;
+		}
+
 		if (db.count(nev))//regisztrált player
 		{
 			TStickRecord& record=db[nev];
@@ -481,25 +495,47 @@ protected:
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
 				SendWeather(*socketek[i],weathermost);
-		}else
-		if (command=="kick")
+		}else	
+		if (command=="kick" || command=="ban")
 		{
+			int n=socketek.size();
+			bool kick=command=="kick";
 			int kickuid=atoi(parameter.c_str());
+			if (!kickuid)
+				for(int i=0;i<n;++i)
+					if (socketek[i]->context.nev==parameter)
+						kickuid=socketek[i]->context.UID;
+
 			int pos=parameter.find(' ');
 			string uzenet;
 			if(pos>=0)
 				uzenet.assign(parameter.begin()+pos,parameter.end());
 			else
 				uzenet=lang(sock.context.nyelv,19); //lol lang specifikus default kick
-			int n=socketek.size();
+			
 			for(int i=0;i<n;++i)
 				if (socketek[i]->context.UID==kickuid)
 				{
-					SendKick(*socketek[i],lang(sock.context.nyelv,20)+uzenet);
-					SendChatToAll("\x11\xe0"+lang(sock.context.nyelv,21)+"\x11\x03"+
+					SendKick(*socketek[i],lang(sock.context.nyelv,kick?20:35)+uzenet,true);
+					SendChatToAll("\x11\xe0"+lang(sock.context.nyelv,kick?21:36)+"\x11\x03"+
 								  socketek[i]->context.nev+"\x11\xe0"+lang(sock.context.nyelv,22)+uzenet);
+					if (!kick) 
+						bans[itoa(socketek[i]->address)]=uzenet;
 					break;
 				}
+		}else
+		if (command=="banlist" )
+		{
+			for(map<string,string>::iterator i=bans.begin();i!=bans.end();++i)
+				SendChat(sock,i->first+ ": "+i->second);
+		}else
+		if (command=="unban" )
+		{
+			if (bans.count(parameter))
+			{
+				SendChat(sock,"Unbanned "+parameter);
+				bans.erase(parameter);
+			}
 		}else
 		if (command=="uid")
 		{
@@ -509,6 +545,17 @@ protected:
 				string& nev=socketek[i]->context.nev;
 				if (nev.find(parameter)!=string::npos)
 					SendChat(sock,itoa(socketek[i]->context.UID)+" : "+nev);
+			}
+		}
+		else
+		if (command=="ip")
+		{
+			int n=socketek.size();
+			for(int i=0;i<n;++i)
+			{
+				string& nev=socketek[i]->context.nev;
+				if (nev.find(parameter)!=string::npos)
+					SendChat(sock,string(inet_ntoa(*(in_addr*)&socketek[i]->address))+" : "+nev);
 			}
 
 		}
