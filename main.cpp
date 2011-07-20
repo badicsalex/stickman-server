@@ -741,7 +741,7 @@ protected:
 			sock.SendLine(postmsg);
 			
 			string lin;
-			while(!sock.error)
+			while(!sock.GetError())
 			{
 					sock.Update();
 					Sleep(1);
@@ -767,7 +767,7 @@ protected:
 			sock.SendLine("");
 
 			//Küldjönk el és recv-eljünk mindent (kapcsolatzárásig)
-			while(!sock.error)
+			while(!sock.GetError())
 			{
 					sock.Update();
 					Sleep(1);
