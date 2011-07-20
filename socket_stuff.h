@@ -51,38 +51,45 @@ public:
 
 class TBufferedSocket
 {
+protected:
 	SOCKET sock;
 	vector<char> recvbuffer;
 	vector<char> sendbuffer;
 	TBufferedSocket(const TBufferedSocket& mirol);
 	TBufferedSocket& operator= (const TBufferedSocket& mirol);
 	bool closeaftersend;
-public:
 	int error;// ha nem 0, gáz volt.
+public:
+	
 	// A függvény meghívásával elfogadja a szerzõdési feltételeket
 	// miszerint teljesen lemond a socket használatáról.
 	TBufferedSocket(SOCKET sock):sock(sock), closeaftersend(false),error(0){};
 	TBufferedSocket(const string& hostname,int port);
 	~TBufferedSocket(){ closesocket(sock); }
 
+	int GetError(){return error;} //read only a változó.
 	void Update(); //Hívjad sokat. Mert alattam az a kettõ csak a buffereket nézi
 	bool RecvFrame(TSocketFrame& hova);// Légyszi újonnan generáltat, mert úgyis felülírja.
-	void SendFrame(const TSocketFrame& mit,bool finalframe=false);// Légyszi ne legyen üres.
+	void SendFrame(const TSocketFrame& mit,bool final=false);// Légyszi ne legyen üres.
+
+	bool RecvBytes(vector<unsigned char>& hova,int bytes);
+	void SendBytes(const unsigned char* mit,int bytes,bool final=false);// Légyszi ne legyen üres.
+
 	bool RecvLine(string& hova); // \r\n nélkül
 	const string RecvLine2(); //ha nem érdekel hogy sikrült-e, hanem mindenképp kell egy string
 	void SendLine(const string& mit, bool final=false);// \r\n nélkül
 };
 
 // abstract class virtual callback-ekkel
-template <class TContext>
+template <class TContext, class TSocket=TBufferedSocket>
 class TBufferedServer{
 protected:
-	class TMySocket: public TBufferedSocket{
+	class TMySocket: public TSocket{
 	public:
 		TContext context; //Default konstruktor!!!
 		ULONG address; 
 		TMySocket(SOCKET sock, ULONG address): 
-			TBufferedSocket(sock),address(address){}
+			TSocket(sock),address(address){}
 	};
 
 	SOCKET listenersock;
@@ -118,8 +125,8 @@ int SelectForError(SOCKET sock);
 
 ////////// TBufferedServer ///////////
 
-template <class TContext>
- TBufferedServer<TContext>::TBufferedServer(int port)
+template <class TContext,class TSocket>
+ TBufferedServer<TContext,TSocket>::TBufferedServer(int port)
 {
 	#ifdef _WIN32
 	WSADATA data;
@@ -147,8 +154,8 @@ template <class TContext>
 		return;
 }
 
-template <class TContext>
-void  TBufferedServer<TContext>::Update()
+template <class TContext,class TSocket>
+void  TBufferedServer<TContext,TSocket>::Update()
 {
 	// accept stuff
 	while(SelectForRead(listenersock))
@@ -176,7 +183,7 @@ void  TBufferedServer<TContext>::Update()
 	while((unsigned int)i<socketek.size())
 	{
 		socketek[i]->Update();
-		if (socketek[i]->error)
+		if (socketek[i]->GetError())
 			DeleteSocket(i);
 		else
 			++i;
@@ -188,8 +195,8 @@ void  TBufferedServer<TContext>::Update()
 		OnUpdate(*socketek[i]);
 }
 
-template <class TContext>
-void TBufferedServer<TContext>::DeleteSocket(int i)
+template <class TContext,class TSocket>
+void TBufferedServer<TContext,TSocket>::DeleteSocket(int i)
 {
 	delete socketek[i]; // ez klózol is.
 	socketek.erase(socketek.begin()+i);

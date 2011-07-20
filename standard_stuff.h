@@ -116,4 +116,9 @@ inline void findandreplace(string& target,const string& mit,const string& mivel)
         pos++;
     }
 }
+
+inline bool startswith(const string& mi, const string& mivel)
+{
+	return mi.compare(0,mivel.size(),mivel)==0;
+}
 #endif

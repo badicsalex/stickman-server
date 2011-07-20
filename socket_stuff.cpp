@@ -1,5 +1,9 @@
 #include "socket_stuff.h"
 #include <iostream>
+#ifdef _WIN32
+typedef int socklen_t;
+#endif
+
 using namespace std;
 ///////////// TSocketFrame ///////////////
 
@@ -239,7 +243,7 @@ bool TBufferedSocket::RecvFrame(TSocketFrame& hova)
 	return true;
 }
 
-void TBufferedSocket::SendFrame(const TSocketFrame& mit,bool finalframe)
+void TBufferedSocket::SendFrame(const TSocketFrame& mit,bool final)
 {
 	if (mit.cursor<=0) // má megint balfasz voltál
 		return;
@@ -247,7 +251,7 @@ void TBufferedSocket::SendFrame(const TSocketFrame& mit,bool finalframe)
 	if (closeaftersend) //má volt egy final frame
 		return;
 
-	if(finalframe)
+	if(final)
 		closeaftersend=true;
 
 	char egybyte;
@@ -258,6 +262,33 @@ void TBufferedSocket::SendFrame(const TSocketFrame& mit,bool finalframe)
 
 	sendbuffer.insert(sendbuffer.end(),mit.data,mit.data+mit.cursor);
 }
+
+
+bool TBufferedSocket::RecvBytes(vector<unsigned char>& hova,int bytes)
+{
+	if (recvbuffer.size()<(unsigned)bytes)
+		return false;
+	hova.resize(bytes);
+	for (int i=0;i<bytes;++i)
+		hova[i]=recvbuffer[i];
+	recvbuffer.erase(recvbuffer.begin(),recvbuffer.begin()+bytes);
+	return true;
+}
+
+void TBufferedSocket::SendBytes(const unsigned char* mit,int bytes,bool final)
+{
+	if (bytes<=0) // má megint balfasz voltál
+		return;
+
+	if (closeaftersend) //má volt egy final frame
+		return;
+
+	if(final)
+		closeaftersend=true;
+
+	sendbuffer.insert(sendbuffer.end(),mit,mit+bytes);
+}
+
 
 bool TBufferedSocket::RecvLine(string& hova)
 {
