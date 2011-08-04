@@ -3,6 +3,7 @@
 #ifdef _WIN32
 #include <winsock.h>
 #else
+#include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <netdb.h>
 typedef unsigned int ULONG;
