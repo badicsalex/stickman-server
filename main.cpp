@@ -239,7 +239,8 @@ protected:
 		frame.WriteInt(n2);
 		/*!TODO legközelebbi 50 kiválasztása */
 		for(int i=0;i<n;++i)
-		if(sock.context.realm==socketek[i]->context.realm)
+		if( sock.context.realm   ==socketek[i]->context.realm &&
+			sock.context.checksum==socketek[i]->context.checksum)
 		{
 			TStickContext& scontext=socketek[i]->context;
 			frame.WriteChar((unsigned char)(scontext.ip));
@@ -647,7 +648,8 @@ protected:
 
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
-				if (socketek[i]->context.realm==sock.context.realm)
+				if( sock.context.realm   ==socketek[i]->context.realm &&
+					sock.context.checksum==socketek[i]->context.checksum)
 					SendChat(*socketek[i],uzenet,sock.context.glyph);
 		}
 	}
