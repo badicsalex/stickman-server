@@ -200,6 +200,7 @@ protected:
 
 	int weathermost;
 	int weathercel;
+	unsigned int laststatusfile;
 	virtual void OnConnect(TMySocket& sock)
 	{
 		sock.context.loggedin=false;
@@ -234,7 +235,8 @@ protected:
 		int n=socketek.size();
 		int n2=0;
 		for(int i=0;i<n;++i)
-			if(sock.context.realm==socketek[i]->context.realm)
+			if( sock.context.realm   ==socketek[i]->context.realm &&
+				sock.context.checksum==socketek[i]->context.checksum)
 				++n2;
 		frame.WriteInt(n2);
 		/*!TODO legközelebbi 50 kiválasztása */
@@ -867,7 +869,8 @@ protected:
 public:
 
 	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
-		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15){}
+		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15),
+		laststatusfile(0){}
 
 	void Update()
 	{
@@ -916,6 +919,13 @@ public:
 					SendWeather(*socketek[i],weathermost);
 			lastweather=GetTickCount();
 		}
+		if (laststatusfile<GetTickCount()-60000)//percenként
+		{
+			ofstream fil("status");
+			fil<<socketek.size();
+			laststatusfile=GetTickCount();
+		}
+
 	}
 };
 
