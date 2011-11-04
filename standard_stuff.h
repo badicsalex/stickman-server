@@ -97,6 +97,7 @@ template <class TKey, class TValue>
 class TAutoPersistentMap{
 	map<TKey,TValue> data;
 	const string filenev;
+	bool dirty;
 	TAutoPersistentMap(const TAutoPersistentMap&);
 	TAutoPersistentMap& operator=(const TAutoPersistentMap&);
 
@@ -121,7 +122,7 @@ class TAutoPersistentMap{
 	};
 public:
 	
-	TAutoPersistentMap(const string& filenev):filenev(filenev)
+	TAutoPersistentMap(const string& filenev):filenev(filenev),dirty(false)
 	{
 		ifstream fil((filenev+".pm1").c_str());
 		unsigned int num=0;
@@ -160,8 +161,9 @@ public:
 		SaveToFile(filenev+".pm2");
 	}
 
-	void Add(const TKey& k, const TValue& v)
+	void Set(const TKey& k, const TValue& v)
 	{
+		dirty=true;
 		data[k]=v;
 	}
 
@@ -172,7 +174,8 @@ public:
 
 	~TAutoPersistentMap()
 	{
-		Flush();
+		if (dirty)
+			Flush();
 	}
 };
 
