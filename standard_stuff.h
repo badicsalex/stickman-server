@@ -1,9 +1,12 @@
 #ifndef T_AND_S_H_INCLUDED
 #define T_AND_S_H_INCLUDED
+#define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
 #include <string>
 #include <vector>
+#include <map>
 #include <algorithm>
+#include <fstream>
 using namespace std;
 
 template <class Struktura>
@@ -87,12 +90,126 @@ public:
 	}
 };
 
+//TKey-nek kell < operátor, Save és Load fv.
+//TValue-nak Save és Load fv.
+// throwol runtime_error-t, ha gáz van
+template <class TKey, class TValue>
+class TAutoPersistentMap{
+	map<TKey,TValue> data;
+	const string filenev;
+	TAutoPersistentMap(const TAutoPersistentMap&);
+	TAutoPersistentMap& operator=(const TAutoPersistentMap&);
+
+	void SaveToFile(const string& fnev)
+	{
+		ofstream fil(fnev.c_str());
+		unsigned int tmp=0;
+		fil.write((char*)&tmp,sizeof(tmp));
+		tmp=data.size();
+		fil.write((char*)&tmp,sizeof(tmp));
+		for(map<TKey,TValue>::iterator i=data.begin();i!=data.end();++i)
+		{
+			(*i).first.Save(fil);
+			(*i).second.Save(fil);
+		}
+		fil.flush();
+		fil.seekp(0);
+		tmp=0xD011FACE;
+		fil.write((char*)&tmp,sizeof(tmp));
+		fil.flush();
+		fil.close();
+	};
+public:
+	
+	TAutoPersistentMap(const string& filenev):filenev(filenev)
+	{
+		ifstream fil((filenev+".pm1").c_str());
+		unsigned int num=0;
+		unsigned int validfile;
+		fil.read((char*)&validfile,sizeof(validfile));
+
+		if (fil.fail() || validfile!=0xD011FACE)
+		{
+			fil.close();
+			fil.open((filenev+".pm2").c_str());
+			fil.read((char*)&validfile,sizeof(validfile));
+			if (fil.fail() || validfile!=0xD011FACE)
+				num=0;
+			else
+				fil.read((char*)&num,sizeof(num));
+		}
+		else
+			fil.read((char*)&num,sizeof(num));
+
+
+		for(unsigned int i=0;i<num;++i)
+		{
+			TKey key;
+			TValue val;
+			key.Load(fil);
+			val.Load(fil);
+			data[key]=val;
+		}
+
+		fil.close();
+	}
+
+	void Flush()
+	{
+		SaveToFile(filenev+".pm1");
+		SaveToFile(filenev+".pm2");
+	}
+
+	void Add(const TKey& k, const TValue& v)
+	{
+		data[k]=v;
+	}
+
+	const TValue& Get(const TKey& k)
+	{
+		return data[k];
+	}
+
+	~TAutoPersistentMap()
+	{
+		Flush();
+	}
+};
+
+struct TPersistentInt{
+	int value;
+	operator int() { return value; }
+	TPersistentInt(int a=0):value(a){}
+
+	bool operator < (const TPersistentInt& a) const
+	{
+		return value<a.value;
+	}
+
+	bool operator < (const int a) const
+	{
+		return value<a;
+	}
+
+	void Save(ostream& strm) const
+	{
+		strm.write((const char*)&value,sizeof(value));
+	}
+	
+	void Load(istream& strm)
+	{
+		strm.read((char*)&value,sizeof(value));
+	}
+
+};
+
 inline const string itoa(int mit)
 {
 	char buffer[50];
 	sprintf(buffer,"%d",mit);
 	return buffer;
 }
+
 
 inline void toupper(string& mit)
 {
