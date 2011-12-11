@@ -83,7 +83,7 @@ public:
 	const string& operator()(int langid,int stringid) const
 	{
 		if (langid<0 || (int)data.size()<=langid)
-			return err;
+			langid=0;
 		if (stringid<0 || (int)data[langid].size()<=stringid)
 			return err;
 		return data[langid][stringid];

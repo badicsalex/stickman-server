@@ -6,6 +6,7 @@ const string TSimpleLang::err="TSLERR";
 TSimpleLang::TSimpleLang(const string& langfile)
 {
 	ifstream fil(langfile.c_str());
+	fil>>noskipws;
 	int langmost=0;
 	while(!fil.fail() && !fil.eof())
 	{
