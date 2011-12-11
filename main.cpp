@@ -203,6 +203,12 @@ struct TStickRecord{
   int auth
 */
 
+#define SERVERMSG_EVENT 7
+/*
+  string nev
+  int phase
+*/
+
 class StickmanServer: public TBufferedServer<TStickContext>{
 protected:
 	const TSimpleLang lang;
@@ -218,6 +224,8 @@ protected:
 	unsigned int lastUID;
 	unsigned int lastUDB;
 	unsigned int lastweather;
+	unsigned int nextevent;
+
 	time_t lastUDBsuccess;
 
 	int weathermost;
@@ -328,6 +336,16 @@ protected:
 		frame.WriteInt(sock.context.udpauth);
 		sock.SendFrame(frame);
 	}
+
+	void SendEvent(TMySocket& sock,const string &nev, int phase)
+	{
+		TSocketFrame frame;
+		frame.WriteChar(SERVERMSG_EVENT);
+		frame.WriteString(nev);
+		frame.WriteInt(phase);
+		sock.SendFrame(frame);
+	}
+
 
 	void OnMsgLogin(TMySocket& sock,TSocketFrame& msg)
 	{
@@ -585,6 +603,10 @@ protected:
 			}
 
 		}
+		else
+		if (command=="event")
+			StartEvent(parameter);
+
 	}
 
 	void ChatCleanup(string& uzenet)
@@ -775,6 +797,17 @@ protected:
 			AddMedal(sock,medalid);
 	}
 
+	void StartEvent(const string &nev)
+	{
+		int n=socketek.size();
+		for(int i=0;i<n;++i)
+			if (socketek[i]->context.loggedin)
+			{
+				AddMedal(*socketek[i],'S'|('P'<<8));
+				SendEvent(*socketek[i],nev,0);
+			}
+	}
+
 	void UpdateDb()
 	{
 		cout<<"Updating database..."<<endl;
@@ -930,6 +963,8 @@ protected:
 			SendKick(sock,lang(sock.context.nyelv,33),false);
 
 	}
+
+
 public:
 
 	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
@@ -948,6 +983,7 @@ public:
 			int medalid=buffer1[0] | (buffer1[1]<<8);
 			medalnevek[medalid]=string(buffer2);
 		}
+		nextevent=GetTickCount()+24*3600*1000;
 	}
 
 	void Update()
@@ -1008,7 +1044,11 @@ public:
 			fil<<socketek.size();
 			laststatusfile=GetTickCount();
 		}
-
+		if (nextevent<GetTickCount())
+		{
+			StartEvent("spaceship");
+			nextevent=GetTickCount()+12*3600*1000+rand()%(24*3600*1000);
+		}
 	}
 };
 
