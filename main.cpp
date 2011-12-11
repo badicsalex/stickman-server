@@ -40,17 +40,20 @@ using namespace std;
 
 const struct TConfig{
 	int clientversion;				//kliens verzió, ez alatt kickel
+	unsigned int datachecksum;
 	unsigned char sharedkey[20];	//a killenkénti kriptográfiai aláírás kulcsa
 	string webinterface;			//a webes adatbázis hostneve
 	string webinterfacedown;		//a webes adatbázis letöltõ fájljának URL-je
 	string webinterfaceup;			//aa webes adatbázis killfeltöltõ fájljának URL-je
 	string allowedchars;			//névben megengedett karakterek
+	string lowercasechars;			//névben megengedett karakterek
 	vector<string> csunyaszavak;	//cenzúrázandó szavak
 	vector<string> viragnevek;		//amivel lecseréljük a cenzúrázandó szavakat.
 	TConfig(const string& honnan)
 	{
 		ifstream fil(honnan.c_str());
 		fil>>clientversion;
+		fil>>hex>>datachecksum;
 		for(int i=0;i<20;++i)
 		{
 			int tmp;
@@ -61,6 +64,7 @@ const struct TConfig{
 		fil>>webinterfacedown;
 		fil>>webinterfaceup;
 		fil>>allowedchars;
+		fil>>lowercasechars;
 
 		string tmpstr;
 
@@ -71,6 +75,16 @@ const struct TConfig{
 		viragnevek=explode(tmpstr,",");
 	}
 
+	const string ToLowercase(const string& mit) const
+	{
+		string result;
+		result=mit;
+		for (unsigned int i=0;i<mit.length();++i)
+			for (unsigned int j=0;j<allowedchars.length();++j)
+				if (result[i]==allowedchars[j])
+					result[i]=lowercasechars[j];
+		return result;
+	}
 } config("config.cfg");
 
 struct TStickContext{
@@ -141,6 +155,12 @@ struct TStickRecord{
 	char [20] crypto
 */
 
+#define CLIENTMSG_MEDAL 5
+/*	A kliens medált kér
+	int medal id
+	char [20] crypto
+*/
+
 #define SERVERMSG_LOGINOK 1
 /*
 	int UID
@@ -193,6 +213,8 @@ protected:
 
 	map<string,string> bans;
 
+	map<unsigned short,string> medalnevek;
+
 	unsigned int lastUID;
 	unsigned int lastUDB;
 	unsigned int lastweather;
@@ -204,6 +226,7 @@ protected:
 	virtual void OnConnect(TMySocket& sock)
 	{
 		sock.context.loggedin=false;
+		sock.context.registered=false;
  		sock.context.UID=++lastUID;
 		for(int i=0;i<20;++i)
 			sock.context.crypto[i]=(unsigned char)rand();
@@ -372,9 +395,9 @@ protected:
 				return;
 		}
 
-		if (db.count(nev))//regisztrált player
+		if (db.count(config.ToLowercase(nev)))//regisztrált player
 		{
-			TStickRecord& record=db[nev];
+			TStickRecord& record=db[config.ToLowercase(nev)];
 			if (record.jelszo!=jelszo)
 			{
 				SendKick(sock,lang(nyelv,7),false);
@@ -655,11 +678,9 @@ protected:
 					SendChat(*socketek[i],uzenet,sock.context.glyph);
 		}
 	}
-
-	void OnMsgKill(TMySocket& sock,TSocketFrame& msg)
+	
+	bool IsCryptoValid(TMySocket& sock,TSocketFrame& msg)
 	{
-		int UID=msg.ReadInt();
-
 		// Minden kill után seedet xorolunk a titkos kulccsal, és egyet
 		// ráhashelünk a jelenlegi crypt értékre.
 		// Ez kellõen fos verifikálása a killnek, de ennyivel kell beérni
@@ -672,11 +693,30 @@ protected:
 		SHA1_Hash(newcrypto,20,sock.context.crypto);
 		
 		for(int i=0;i<20;++i)
-			if (sock.context.crypto[i]!=msg.ReadChar())
-			{
-				SendKick(sock,lang(sock.context.nyelv,25),true);
-				return;
-			}
+		if (sock.context.crypto[i]!=msg.ReadChar())
+			return false;
+
+		return true;
+	}
+
+	void AddMedal(TMySocket& sock, int medalid)
+	{
+		TStickRecord &dbrecord=db[config.ToLowercase(sock.context.nev)];
+		if (dbrecord.medal.count(medalid)!=0)
+			return;
+
+		dbrecord.medal.insert(medalid);
+		if (killdb.count(config.ToLowercase(sock.context.nev))==0)
+			killdb[config.ToLowercase(sock.context.nev)]=0;
+		SendChat(sock,"\x11\x6c"+lang(sock.context.nyelv,37)+"\x11\x03"+medalnevek[medalid]+" \x11\x01"+lang(sock.context.nyelv,38));
+	}
+
+	void OnMsgKill(TMySocket& sock,TSocketFrame& msg)
+	{
+		int UID=msg.ReadInt();
+
+		if (!IsCryptoValid(sock,msg))
+			SendKick(sock,lang(sock.context.nyelv,25),true);
 		
 
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
@@ -687,30 +727,53 @@ protected:
 
 		int n=socketek.size();
 		for(int i=0;i<n;++i)
-			if (socketek[i]->context.UID==UID &&
-				socketek[i]->context.loggedin)
+		if (socketek[i]->context.UID==UID &&
+			socketek[i]->context.loggedin)
+		{
+			socketek[i]->context.kills+=1;
+			if(socketek[i]->context.registered)
 			{
-				socketek[i]->context.kills+=1;
-				if(socketek[i]->context.registered)
+				const string nev_lower=config.ToLowercase(socketek[i]->context.nev);
+				if (socketek[i]->context.realm.size()==0)
 				{
-					const string& nev=socketek[i]->context.nev;
-					if (socketek[i]->context.realm.size()==0)
-					{
-						if (killdb.count(nev))
-							killdb[nev]+=1;
-						else
-							killdb[nev]=1;
-						db[nev].napikill+=1;
-						db[nev].osszkill+=1;
-					}
-					SendChat(*socketek[i],"\x11\x01"+lang(socketek[i]->context.nyelv,27)+"\x11\x03"+sock.context.nev+"\x11\x01"+lang(socketek[i]->context.nyelv,28));
-					SendChat(sock,"\x11\x01"+lang(sock.context.nyelv,29)+"\x11\x03"+nev+" \x11\x01"+lang(sock.context.nyelv,30));
-					break;
+					if (killdb.count(nev_lower))
+						killdb[nev_lower]+=1;
+					else
+						killdb[nev_lower]=1;
+					db[nev_lower].napikill+=1;
+					db[nev_lower].osszkill+=1;
+
+					const int killcnt[9]={10,30,90,250,750,2000,5000,10000,30000};
+					for (int i=0;i<9;++i)
+						if (db[nev_lower].osszkill>=killcnt[i])
+							AddMedal(sock, 'K' | (('1'+i)<<8) );
 				}
 			}
-		
-	}
 
+			SendChat(*socketek[i],"\x11\x01"+lang(socketek[i]->context.nyelv,27)+"\x11\x03"+sock.context.nev+"\x11\x01"+lang(socketek[i]->context.nyelv,28));
+			SendChat(sock,"\x11\x01"+lang(sock.context.nyelv,29)+"\x11\x03"+socketek[i]->context.nev+" \x11\x01"+lang(sock.context.nyelv,30));
+			break;
+		}
+	}
+	
+	
+
+	void OnMsgMedal(TMySocket& sock,TSocketFrame& msg)
+	{
+		int medalid=msg.ReadInt();
+
+		if (!IsCryptoValid(sock,msg))
+			SendKick(sock,lang(sock.context.nyelv,25),true);
+		
+		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
+		{
+			SendKick(sock,lang(sock.context.nyelv,26),true);
+			return;
+		}
+		
+		if (sock.context.realm=="")
+			AddMedal(sock,medalid);
+	}
 
 	void UpdateDb()
 	{
@@ -817,7 +880,7 @@ protected:
 				int n=medal.length();
 				for(int i=0;i<n;i+=2)
 					ujrec.medal.insert(medal[i]|(medal[i+1]<<8));
-				db[nev]=ujrec;
+				db[config.ToLowercase(nev)]=ujrec;
 				lastname=nev;
 			}
 			cout<<"Last name: "<<lastname<<endl;
@@ -840,6 +903,7 @@ protected:
 				case CLIENTMSG_STATUS:	OnMsgStatus(sock,recvd); break;
 				case CLIENTMSG_CHAT:	OnMsgChat(sock,recvd); break;
 				case CLIENTMSG_KILLED:	OnMsgKill(sock,recvd); break;
+				case CLIENTMSG_MEDAL:	OnMsgMedal(sock,recvd); break;
 				default:
 					SendKick(sock,lang(sock.context.nyelv,32),true);
 			}
@@ -870,7 +934,21 @@ public:
 
 	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
 		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15),
-		laststatusfile(0){}
+		laststatusfile(0)
+	{
+		ifstream fil("medals.cfg");
+		while(1)
+		{
+			char buffer1[1024];
+			fil.getline(buffer1,1024);
+			char buffer2[1024];
+			fil.getline(buffer2,1024);
+			if (fil.eof() || fil.fail())
+				break;
+			int medalid=buffer1[0] | (buffer1[1]<<8);
+			medalnevek[medalid]=string(buffer2);
+		}
+	}
 
 	void Update()
 	{
@@ -900,6 +978,11 @@ public:
 		{
 			UpdateDb();
 			lastUDB=GetTickCount();
+
+			int n=socketek.size();
+			for(int i=0;i<n;++i)
+			if (socketek[i]->context.loggedin)
+				socketek[i]->context.lastrecv=lastUDB;
 		}
 
 		TBufferedServer<TStickContext>::Update();
