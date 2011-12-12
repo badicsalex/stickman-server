@@ -108,7 +108,7 @@ class TAutoPersistentMap{
 		fil.write((char*)&tmp,sizeof(tmp));
 		tmp=data.size();
 		fil.write((char*)&tmp,sizeof(tmp));
-		for(map<TKey,TValue>::iterator i=data.begin();i!=data.end();++i)
+		for(typename map<TKey,TValue>::iterator i=data.begin();i!=data.end();++i)
 		{
 			(*i).first.Save(fil);
 			(*i).second.Save(fil);
