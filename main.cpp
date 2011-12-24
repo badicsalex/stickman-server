@@ -768,7 +768,7 @@ protected:
 					const int killcnt[9]={10,30,90,250,750,2000,5000,10000,30000};
 					for (int i=0;i<9;++i)
 						if (db[nev_lower].osszkill>=killcnt[i])
-							AddMedal(sock, 'K' | (('1'+i)<<8) );
+							AddMedal(*socketek[i], 'K' | (('1'+i)<<8) );
 				}
 			}
 
