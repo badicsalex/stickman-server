@@ -283,10 +283,10 @@ protected:
 
 			frame.WriteChar((unsigned char)(scontext.port));
 			frame.WriteChar((unsigned char)(scontext.port>>8));
-		
+	
 			frame.WriteInt(scontext.UID);
 
-			frame.WriteString(scontext.nev);
+			frame.WriteString(scontext.clan+" "+scontext.nev);
 
 			frame.WriteInt(scontext.fegyver);
 			frame.WriteInt(scontext.fejrevalo);
@@ -756,7 +756,7 @@ protected:
 			if(socketek[i]->context.registered)
 			{
 				const string nev_lower=config.ToLowercase(socketek[i]->context.nev);
-				if (socketek[i]->context.realm.size()==0)
+				if (socketek[i]->context.realm.size()==0 && socketek[i]->context.checksum==config.datachecksum)
 				{
 					if (killdb.count(nev_lower))
 						killdb[nev_lower]+=1;
