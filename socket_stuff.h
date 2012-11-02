@@ -79,6 +79,8 @@ public:
 	bool RecvLine(string& hova); // \r\n nélkül
 	const string RecvLine2(); //ha nem érdekel hogy sikrült-e, hanem mindenképp kell egy string
 	void SendLine(const string& mit, bool final=false);// \r\n nélkül
+
+	
 };
 
 // abstract class virtual callback-ekkel
@@ -98,6 +100,7 @@ protected:
 	void DeleteSocket(int index);//és close
 	virtual void OnConnect(TMySocket& sock)=0;
 	virtual void OnUpdate(TMySocket& sock)=0;
+	virtual void OnBeforeDelete(TMySocket& sock)=0;
 public:
 	TBufferedServer(int port);
 	~TBufferedServer(){ while (!socketek.empty()) DeleteSocket(0); }
@@ -199,6 +202,7 @@ void  TBufferedServer<TContext,TSocket>::Update()
 template <class TContext,class TSocket>
 void TBufferedServer<TContext,TSocket>::DeleteSocket(int i)
 {
+	OnBeforeDelete(*socketek[i]);
 	delete socketek[i]; // ez klózol is.
 	socketek.erase(socketek.begin()+i);
 }
