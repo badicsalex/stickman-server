@@ -9,8 +9,10 @@
 #include <fstream>
 #include <stdlib.h>
 #include <time.h>
+
 #ifdef _WIN32
 #include <windows.h>
+
 
 #else
 //mi a fasznak van egyatalan SIGPIPE?! Az eszem megall.
@@ -49,6 +51,8 @@ const struct TConfig{
 	string lowercasechars;			//névben megengedett karakterek
 	vector<string> csunyaszavak;	//cenzúrázandó szavak
 	vector<string> viragnevek;		//amivel lecseréljük a cenzúrázandó szavakat.
+	vector<string> adminok;			//adminok listája
+	string scriptfile;				//a scriptfajl helye
 	TConfig(const string& honnan)
 	{
 		ifstream fil(honnan.c_str());
@@ -63,16 +67,24 @@ const struct TConfig{
 		fil>>webinterface;
 		fil>>webinterfacedown;
 		fil>>webinterfaceup;
+		
+		string tmpstr;
+
+		fil>>tmpstr; 
+		adminok=explode(tmpstr,",");
+		
 		fil>>allowedchars;
 		fil>>lowercasechars;
 
-		string tmpstr;
+		
 
 		fil>>tmpstr; 
 		csunyaszavak=explode(tmpstr,",");
 
 		fil>>tmpstr; 
 		viragnevek=explode(tmpstr,",");
+		
+		fil>>scriptfile;
 	}
 
 	const string ToLowercase(const string& mit) const
@@ -87,6 +99,14 @@ const struct TConfig{
 	}
 } config("config.cfg");
 
+
+struct T1v1Game{
+	string kihivoNev,ellenfelNev;
+	int kihivoPont,ellenfelPont;
+	char allapot;
+	int limit;
+};
+
 struct TStickContext{
 	/* adatok */
 	string nev;
@@ -100,6 +120,9 @@ struct TStickContext{
 	int kills; //mai napon
 	int checksum;
 	int nyelv;
+	bool admin;
+	bool kihivo;
+	bool is1v1;
 
 	/* állapot */
 	int glyph;
@@ -116,6 +139,7 @@ struct TStickContext{
 	int lastwhisp;
 };
 
+
 struct TStickRecord{
 	int id;
 	string jelszo;
@@ -123,7 +147,33 @@ struct TStickRecord{
 	int napikill;
 	string clan;
 	set<WORD> medal;
+	int fegyv;
 	int level;
+	int kills;
+};
+
+
+
+#define VARAKOZAS 0
+#define FOLYAMATBAN 1
+#define VEGE 2
+
+
+#define	FEGYV_M4A1 0
+#define	FEGYV_M82A1 1
+#define	FEGYV_LAW 2
+#define	FEGYV_MP5A3 3
+
+#define FEGYV_MPG 4
+#define	FEGYV_QUAD 5
+#define	FEGYV_NOOB 6
+#define	FEGYV_X72 7
+
+int fegyvtoint(int i)
+{
+	int t = i;
+	if (i>127) t= i-128+4;
+	return t%8;
 };
 
 #define CLIENTMSG_LOGIN 1
@@ -209,17 +259,26 @@ struct TStickRecord{
   int phase
 */
 
+#define SERVERMSG_1V1 8
+/*
+  string kihivo neve
+  int limit
+*/
+
+
 class StickmanServer: public TBufferedServer<TStickContext>{
 protected:
 	const TSimpleLang lang;
 	TUDPSocket udp;
 
 	map<string,TStickRecord> db;
-	map<string,int> killdb;
+	map<string,int*> killdb;
 
 	map<string,string> bans;
 
 	map<unsigned short,string> medalnevek;
+
+	vector<T1v1Game> challenges;
 
 	unsigned int lastUID;
 	unsigned int lastUDB;
@@ -231,6 +290,15 @@ protected:
 	int weathermost;
 	int weathercel;
 	unsigned int laststatusfile;
+
+
+	TMySocket* getSocketByName(const string nev)
+	{
+		for (int a=0;a<socketek.size();a++)
+			if (socketek[a]->context.nev==nev) return socketek[a];
+		return 0;
+	}
+
 	virtual void OnConnect(TMySocket& sock)
 	{
 		sock.context.loggedin=false;
@@ -247,6 +315,44 @@ protected:
 		sock.context.floodtime=0;
 		sock.context.udpauth=rand();
 		sock.context.nyelv=0;
+	}
+
+	virtual void OnBeforeDelete(TMySocket& sock)
+	{
+		cout << sock.context.nev << " lecsatlakozott \n";
+		TMySocket *so;
+		for (int i=0;i<challenges.size();i++)
+		{
+			if ((getSocketByName(challenges[i].ellenfelNev)==&sock) && challenges[i].allapot!=VEGE)
+			{
+				so = getSocketByName(challenges[i].kihivoNev);
+				if (so) 
+				{
+					so->context.realm="";
+					so->context.is1v1=false;
+					SendChat(*so,lang(so->context.nyelv,45));
+					SendChallenge(*so,"",2);
+				}
+				challenges.erase(challenges.begin()+i);
+			}
+		}
+
+		for (int i=0;i<challenges.size();i++)
+		{
+			if (getSocketByName(challenges[i].kihivoNev)==&sock && challenges[i].allapot!=VEGE)
+			{
+				so = getSocketByName(challenges[i].ellenfelNev);
+				if (so) 
+				{
+					so->context.realm="";
+					so->context.is1v1=false;
+					SendChat(*so,lang(so->context.nyelv,45));
+					SendChallenge(*so,"",2);
+				}
+				challenges.erase(challenges.begin()+i);
+			}
+		}
+
 	}
 	
 	void SendKick(TMySocket& sock,const string& indok="Kicked without reason",bool hard=false)
@@ -283,7 +389,7 @@ protected:
 
 			frame.WriteChar((unsigned char)(scontext.port));
 			frame.WriteChar((unsigned char)(scontext.port>>8));
-	
+		
 			frame.WriteInt(scontext.UID);
 
 			frame.WriteString(scontext.clan+" "+scontext.nev);
@@ -302,6 +408,10 @@ protected:
 		frame.WriteInt(sock.context.UID);
 		for(int i=0;i<20;++i)
 			frame.WriteChar(sock.context.crypto[i]);
+		if (sock.context.registered)
+			frame.WriteInt(db[config.ToLowercase(sock.context.nev)].kills);
+		else
+		frame.WriteInt(0);
 		sock.SendFrame(frame);
 	}
 
@@ -346,11 +456,29 @@ protected:
 		sock.SendFrame(frame);
 	}
 
+	void SendChallenge(TMySocket& sock,const string &nev,char started,int limit=0)
+	{
+		TSocketFrame frame;
+		frame.WriteChar(SERVERMSG_1V1);
+		frame.WriteString(nev);
+		frame.WriteChar(started);
+		frame.WriteInt(limit);
+		sock.SendFrame(frame);
+	}
+
 
 	void OnMsgLogin(TMySocket& sock,TSocketFrame& msg)
 	{
 		int verzio=msg.ReadInt();
 		int nyelv=sock.context.nyelv=msg.ReadInt();
+		
+		sock.context.is1v1 = false;
+		
+		// anti multi
+		int n=socketek.size();
+		for (int a = 0; a<socketek.size();a++)
+			if (socketek[a]->context.nev==sock.context.nev && socketek[a]->context.UID!=sock.context.UID)
+				SendKick(sock,lang(nyelv,37),true);
 
 		if (!lang.HasLang(nyelv))
 			nyelv=0;
@@ -366,8 +494,8 @@ protected:
 			return;
 		}
 		string& nev=sock.context.nev=msg.ReadString();
-		int n=nev.length();
-		if (n==0)
+		int nn=nev.length();
+		if (nn==0)
 		{
 			SendKick(sock,lang(nyelv,3),false);
 			return;
@@ -384,6 +512,15 @@ protected:
 				return;
 			}
 		
+		bool isadmin = false;
+		for (int a = 0; a<config.adminok.size();a++)
+			if (sock.context.nev==config.adminok[a]) 
+				{
+				isadmin = true;
+				break;
+				}
+		sock.context.admin = isadmin;
+
 
 		string jelszo=msg.ReadString();
 
@@ -423,12 +560,18 @@ protected:
 			}
 			sock.context.clan=record.clan;
 			sock.context.registered=true;
+			
+			const string nev_lower=config.ToLowercase(sock.context.nev);
+			if (killdb.count(nev_lower))
+				if (sock.context.fegyver=record.fegyv)
+					record.kills=killdb[nev_lower][fegyvtoint(sock.context.fegyver)];
 			SendLoginOk(sock);
 			string chatuzi="\x11\x01"+lang(nyelv,8)+"\x11\x03"+nev+"\x11\x01"+lang(nyelv,9);
 			if(record.level)
 				chatuzi=chatuzi+lang(nyelv,10)+itoa(record.level)+lang(nyelv,11);
 			SendChat(sock,chatuzi);
 			SendWeather(sock,weathermost);
+
 		}
 		else
 		if (jelszo.length()==0)
@@ -471,16 +614,18 @@ protected:
 	void ChatCommand(TMySocket& sock,const string& command,const string& parameter)
 	{
 		/* user commandok */
+		cout << sock.context.nev << " - " << command << " "<< parameter << endl;
 
-		if (command=="realm" && parameter.size()>0)
+		if (command=="realm" && parameter.size()>0 && sock.context.is1v1==false)
 		{
 			sock.context.realm=parameter;
 			SendChat(sock,lang(sock.context.nyelv,16)+parameter+lang(sock.context.nyelv,17));
 		}else
-		if (command=="norealm" || (command=="realm" && parameter.size()==0))
+			if ((command=="norealm" || (command=="realm" && parameter.size()==0)) && !sock.context.is1v1)
 		{
 			sock.context.realm="";
 			SendChat(sock,lang(sock.context.nyelv,18));
+
 		}else
 		if (command=="w" || command=="whisper")
 		{
@@ -527,11 +672,103 @@ protected:
 			for(int i=0;i<n;++i)
 				if (socketek[i]->context.clan==sock.context.clan)
 					SendChat(*socketek[i],uzenet,sock.context.glyph);
+		}else
+		if (command=="1v1")
+		{
+				string kinek;
+				int limit = 0;
+				size_t pos=0;
+				int n=socketek.size();
+				pos=parameter.find(string(" "));
+				if (pos!=string::npos)
+				{
+					kinek = parameter.substr(0,pos);
+					limit = atoi(parameter.substr(pos+1).c_str());
+					limit = min(50,max(5,limit));
+				}
+				else
+				{
+					kinek = parameter; 
+					limit=10;
+				}
+				bool talalt=false;
+				for(int i=0;i<n;++i)
+				{
+					string& nev=socketek[i]->context.nev;
+					if (nev==kinek && nev!=sock.context.nev)
+					{
+						if ((sock.context.fegyver<127 && socketek[i]->context.fegyver>127) ||
+							 (sock.context.fegyver>127 && socketek[i]->context.fegyver<127) )
+						{
+
+							for (int c=0;c<challenges.size();c++)
+							{
+								if ( challenges[c].ellenfelNev==kinek)
+									challenges.erase(challenges.begin()+c);
+							}
+
+							T1v1Game chall;
+							chall.limit = limit;
+							chall.kihivoNev = sock.context.nev;
+							chall.ellenfelNev = socketek[i]->context.nev;
+							chall.ellenfelPont = chall.kihivoPont = 0;
+							chall.allapot=VARAKOZAS;
+							challenges.push_back(chall);
+							SendChallenge(*socketek[i],sock.context.nev,false,limit);
+							SendChat(sock, lang(sock.context.nyelv,38)+socketek[i]->context.nev+lang(sock.context.nyelv,39)+itoa(limit)+lang(sock.context.nyelv,40));
+							socketek[i]->context.lastwhisp=sock.context.UID;
+							talalt=true;
+							break;
+						}
+						else SendChat(sock, lang(sock.context.nyelv,44));
+
+					}
+				}
+				if (!talalt) SendChat(sock, kinek+lang(sock.context.nyelv,41));
+				
+
+		}else
+		if (command=="accept")
+		{
+
+			for (int i=0;i<challenges.size();i++)
+				if (challenges[i].ellenfelNev==sock.context.nev && challenges[i].allapot==VARAKOZAS)
+				{
+					T1v1Game* chall = &challenges[i];
+					chall->allapot=FOLYAMATBAN;
+
+					
+					
+					int n=socketek.size();
+					for(int a=0;a<n;++a)
+						if (socketek[a]->context.nev==chall->kihivoNev)
+						{
+							SendChallenge(*socketek[a],sock.context.nev,true);
+							SendChallenge(sock,socketek[a]->context.nev,true);
+							sock.context.realm=chall->kihivoNev+"_vs_"+chall->ellenfelNev;
+							socketek[a]->context.realm=chall->kihivoNev+"_vs_"+chall->ellenfelNev;
+							SendChat(sock,lang(sock.context.nyelv,42)+itoa(chall->limit)+lang(sock.context.nyelv,40));
+							SendChat(*socketek[a],lang(socketek[a]->context.nyelv,42)+itoa(chall->limit)+lang(socketek[a]->context.nyelv,40));
+							sock.context.kihivo=false;
+							socketek[a]->context.kihivo=true;
+							sock.context.is1v1 = true;
+							socketek[a]->context.is1v1 = true;
+							socketek[a]->context.kills=0;
+							sock.context.kills=0;
+							break;
+						}
+						
+
+					
+
+
+
+				}
 		}
 
 		/* admin commandok */
-		if (sock.context.nev!="Admin")
-			return;
+			
+		if (!sock.context.admin) return;
 
 		if (command=="weather")
 		{
@@ -560,8 +797,8 @@ protected:
 			for(int i=0;i<n;++i)
 				if (socketek[i]->context.UID==kickuid)
 				{
-					SendKick(*socketek[i],lang(sock.context.nyelv,kick?20:35)+uzenet,true);
-					SendChatToAll("\x11\xe0"+lang(sock.context.nyelv,kick?21:36)+"\x11\x03"+
+					SendKick(*socketek[i],sock.context.nev+lang(sock.context.nyelv,kick?20:35)+uzenet,true);
+					SendChatToAll("\x11\xe0"+sock.context.nev+lang(sock.context.nyelv,kick?21:36)+"\x11\x03"+
 								  socketek[i]->context.nev+"\x11\xe0"+lang(sock.context.nyelv,22)+uzenet);
 					if (!kick) 
 						bans[itoa(socketek[i]->address)]=uzenet;
@@ -686,7 +923,7 @@ protected:
 		else
 		{
 			ChatCleanup(uzenet);
-			if (sock.context.nev=="Admin")
+			if (sock.context.admin)
 				uzenet="\x11\xe0"+sock.context.nev+"\x11\x03: "+uzenet;
 			else
 				uzenet="\x11\x01"+sock.context.nev+"\x11\x03: "+uzenet;
@@ -723,14 +960,16 @@ protected:
 
 	void AddMedal(TMySocket& sock, int medalid)
 	{
-		TStickRecord &dbrecord=db[config.ToLowercase(sock.context.nev)];
-		if (dbrecord.medal.count(medalid)!=0)
-			return;
+		if(db.count(config.ToLowercase(sock.context.nev)))
+		{
+			TStickRecord &dbrecord=db[config.ToLowercase(sock.context.nev)];
 
-		dbrecord.medal.insert(medalid);
-		if (killdb.count(config.ToLowercase(sock.context.nev))==0)
-			killdb[config.ToLowercase(sock.context.nev)]=0;
-		SendChat(sock,"\x11\x6c"+lang(sock.context.nyelv,37)+"\x11\x03"+medalnevek[medalid]+" \x11\x01"+lang(sock.context.nyelv,38));
+			if (dbrecord.medal.count(medalid)!=0)
+				return;
+			dbrecord.medal.insert(medalid);
+
+			SendChat(sock,"\x11\x6c"+lang(sock.context.nyelv,37)+"\x11\x03"+medalnevek[medalid]+" \x11\x01"+lang(sock.context.nyelv,38));
+		}
 	}
 
 	void OnMsgKill(TMySocket& sock,TSocketFrame& msg)
@@ -752,18 +991,78 @@ protected:
 		if (socketek[i]->context.UID==UID &&
 			socketek[i]->context.loggedin)
 		{
+
+			if (socketek[i]->context.is1v1)
+			{
+
+				T1v1Game* chall = 0;
+
+				for (int a=0; a<challenges.size();a++)
+				{
+					if ((challenges[a].ellenfelNev==socketek[i]->context.nev || challenges[a].kihivoNev==socketek[i]->context.nev) && challenges[a].allapot==FOLYAMATBAN)
+					{
+						chall = &challenges[a];
+						break;
+					}
+				}
+
+				if (chall) {
+					if (socketek[i]->context.kihivo) 
+						chall->kihivoPont++;
+					else 
+						chall->ellenfelPont++;
+
+					if (chall->kihivoPont==chall->limit || chall->ellenfelPont==chall->limit) 
+					{
+						//a két ember megkeresése
+						TMySocket *nyertes=0,*vesztes=0;
+						int winpoint, losepoint;
+						if (chall->kihivoPont==chall->limit)
+						{
+						nyertes = getSocketByName(chall->kihivoNev);	winpoint = chall->ellenfelPont;
+						vesztes = getSocketByName(chall->ellenfelNev);		losepoint = chall->kihivoPont;
+						}
+						else
+						{
+						nyertes = getSocketByName(chall->ellenfelNev);		winpoint = chall->kihivoPont;
+						vesztes = getSocketByName(chall->kihivoNev);	losepoint = chall->ellenfelPont;
+						}
+						if (nyertes) SendChat(*nyertes,lang(nyertes->context.nyelv,43)+nyertes->context.nev+" ("+itoa(winpoint)+":"+itoa(losepoint)+")");
+						if (vesztes) SendChat(*vesztes,lang(nyertes->context.nyelv,43)+nyertes->context.nev+" ("+itoa(winpoint)+":"+itoa(losepoint)+")");
+						if (nyertes) nyertes->context.realm = "";
+						if (vesztes) vesztes->context.realm = "";
+						if (nyertes)cout << "nyertes:"<< nyertes->context.nev << endl;
+						if (vesztes)cout << "vesztes:"<< vesztes->context.nev << endl;
+						chall->allapot=VEGE; 
+						if (nyertes) nyertes->context.is1v1 = false;
+						if (vesztes) nyertes->context.is1v1 = false;
+						if (nyertes) SendChallenge(*nyertes,"",2);
+						if (vesztes) SendChallenge(*vesztes,"",2);
+						cout << "1v1 vége ";
+						if (nyertes) cout << nyertes->context.nev <<" nyert " <<" (" << itoa(winpoint) << ":" << itoa(losepoint) << ")";
+						cout << "\n";
+					}
+				}
+			}
 			socketek[i]->context.kills+=1;
+
 			if(socketek[i]->context.registered)
 			{
 				const string nev_lower=config.ToLowercase(socketek[i]->context.nev);
 				if (socketek[i]->context.realm.size()==0 && socketek[i]->context.checksum==config.datachecksum)
 				{
 					if (killdb.count(nev_lower))
-						killdb[nev_lower]+=1;
+						killdb[nev_lower][fegyvtoint(socketek[i]->context.fegyver)]+=1;
 					else
-						killdb[nev_lower]=1;
+					{
+						int* h = new int[8];
+						for (int a=0;a<8;a++) h[a]=0;
+						killdb[nev_lower] = h;
+						killdb[nev_lower][fegyvtoint(socketek[i]->context.fegyver)]=1;
+					}
 					db[nev_lower].napikill+=1;
 					db[nev_lower].osszkill+=1;
+					db[nev_lower].kills+=1;
 
 					const int killcnt[9]={10,30,90,250,750,2000,5000,10000,30000};
 					for (int j=0;j<9;++j)
@@ -807,7 +1106,7 @@ protected:
 				SendEvent(*socketek[i],nev,0);
 			}
 	}
-
+	
 	void UpdateDb()
 	{
 		cout<<"Updating database..."<<endl;
@@ -819,11 +1118,12 @@ protected:
 
 			string postmsg;
 			postmsg.reserve(64*1024);
-			for(map<string,int>::iterator i=killdb.begin();i!=killdb.end();++i)
+			for(map<string,int*>::iterator i=killdb.begin();i!=killdb.end();++i)
 			{
 				const string& nev=i->first;
 				postmsg+=nev+"\r\n";
-				postmsg+=itoa(i->second)+"\r\n";
+				for (int a= 0;a<8;a++)
+					postmsg+=itoa(i->second[a])+"\r\n";
 				for (set<WORD>::iterator j=db[nev].medal.begin();j!=db[nev].medal.end();++j)
 				{
 					postmsg+=((char)*j);
@@ -831,6 +1131,21 @@ protected:
 				}
 				postmsg+="\r\n";
 			}
+			postmsg+="1v1data\r\n";
+			for (int a=0;a<challenges.size();a++)
+				if (challenges[a].allapot==VEGE)
+			{
+				postmsg+=challenges[a].kihivoNev+"\r\n";
+				postmsg+=challenges[a].ellenfelNev+"\r\n";
+				postmsg+=challenges[a].kihivoPont+"\r\n";
+				postmsg+=challenges[a].ellenfelPont+"\r\n";
+			}
+			for (int a=0;a<challenges.size();a++)
+				if (challenges[a].allapot==VEGE)
+				{
+					challenges[a] = challenges.back();
+					challenges.pop_back();
+				}
 
 			sock.SendLine("POST "+config.webinterfaceup+" HTTP/1.1");
 			sock.SendLine("Host: "+config.webinterface);
@@ -841,7 +1156,7 @@ protected:
 			sock.SendLine(postmsg);
 			
 			string lin;
-			while(!sock.GetError())
+			while(!sock.error)
 			{
 					sock.Update();
 					Sleep(1);
@@ -867,7 +1182,7 @@ protected:
 			sock.SendLine("");
 
 			//Küldjönk el és recv-eljünk mindent (kapcsolatzárásig)
-			while(!sock.GetError())
+			while(!sock.error)
 			{
 					sock.Update();
 					Sleep(1);
@@ -918,6 +1233,8 @@ protected:
 			}
 			cout<<"Last name: "<<lastname<<endl;
 		}
+		
+		
 		cout<<"Finished. "<<db.size()<<" player records."<<endl;
 	}
 
@@ -1010,6 +1327,8 @@ public:
 				}
 		}
 
+
+
 		if (lastUDB<GetTickCount()-300000)//5 percenként.
 		{
 			UpdateDb();
@@ -1059,7 +1378,7 @@ int main(){
 	#endif
 	cout<<"Stickserver starting..."<<endl;
 	{
-		StickmanServer server(25252);
+		StickmanServer server(25565);
 		while(1)
 		{
 			server.Update();
