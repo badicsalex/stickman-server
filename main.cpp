@@ -1378,7 +1378,7 @@ int main(){
 	#endif
 	cout<<"Stickserver starting..."<<endl;
 	{
-		StickmanServer server(25565);
+		StickmanServer server(25252);
 		while(1)
 		{
 			server.Update();
