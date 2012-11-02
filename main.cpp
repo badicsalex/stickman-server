@@ -475,11 +475,12 @@ protected:
 		sock.context.is1v1 = false;
 		
 		// anti multi
-		int n=socketek.size();
 		for (int a = 0; a<socketek.size();a++)
+		{
 			if (socketek[a]->context.nev==sock.context.nev && socketek[a]->context.UID!=sock.context.UID)
 				SendKick(sock,lang(nyelv,37),true);
-
+			return;
+		}
 		if (!lang.HasLang(nyelv))
 			nyelv=0;
 
@@ -494,8 +495,8 @@ protected:
 			return;
 		}
 		string& nev=sock.context.nev=msg.ReadString();
-		int nn=nev.length();
-		if (nn==0)
+		int n=nev.length();
+		if (n==0)
 		{
 			SendKick(sock,lang(nyelv,3),false);
 			return;
