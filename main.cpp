@@ -474,13 +474,6 @@ protected:
 		
 		sock.context.is1v1 = false;
 		
-		// anti multi
-		for (int a = 0; a<socketek.size();a++)
-		{
-			if (socketek[a]->context.nev==sock.context.nev && socketek[a]->context.UID!=sock.context.UID)
-				SendKick(sock,lang(nyelv,37),true);
-			return;
-		}
 		if (!lang.HasLang(nyelv))
 			nyelv=0;
 
@@ -512,14 +505,14 @@ protected:
 				SendKick(sock,lang(nyelv,5),false);
 				return;
 			}
-		
+
 		bool isadmin = false;
-		for (int a = 0; a<config.adminok.size();a++)
-			if (sock.context.nev==config.adminok[a]) 
-				{
+		for (int i = 0; i<config.adminok.size();i++)
+			if (nev==config.adminok[i]) 
+			{
 				isadmin = true;
 				break;
-				}
+			}
 		sock.context.admin = isadmin;
 
 
@@ -538,7 +531,7 @@ protected:
 		}
 		int ip=sock.context.ip;
 		cout<<"Login "<<sock.context.nev<<" from "<<((ip)&0xff)<<"."<<((ip>>8)&0xff)<<"."<<((ip>>16)&0xff)<<"."<<((ip>>24)&0xff)<<endl;
-		
+
 		if(bans.count(nev))
 		{
 				SendKick(sock,lang(nyelv,34)+bans[nev],false);
@@ -559,9 +552,20 @@ protected:
 				SendKick(sock,lang(nyelv,7),false);
 				return;
 			}
+
+			// anti multi
+			for (int i = 0; i<socketek.size();i++)
+			if (socketek[i]->context.nev==nev && socketek[i]->context.UID!=sock.context.UID)
+			{
+				SendKick(sock,lang(nyelv,37),false);
+				return;
+			}
+
+
+
 			sock.context.clan=record.clan;
 			sock.context.registered=true;
-			
+
 			const string nev_lower=config.ToLowercase(sock.context.nev);
 			if (killdb.count(nev_lower))
 				if (sock.context.fegyver==record.fegyv)
