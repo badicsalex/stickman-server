@@ -563,7 +563,7 @@ protected:
 			
 			const string nev_lower=config.ToLowercase(sock.context.nev);
 			if (killdb.count(nev_lower))
-				if (sock.context.fegyver=record.fegyv)
+				if (sock.context.fegyver==record.fegyv)
 					record.kills=killdb[nev_lower][fegyvtoint(sock.context.fegyver)];
 			SendLoginOk(sock);
 			string chatuzi="\x11\x01"+lang(nyelv,8)+"\x11\x03"+nev+"\x11\x01"+lang(nyelv,9);
@@ -1156,7 +1156,7 @@ protected:
 			sock.SendLine(postmsg);
 			
 			string lin;
-			while(!sock.error)
+			while(!sock.GetError())
 			{
 					sock.Update();
 					Sleep(1);
@@ -1182,7 +1182,7 @@ protected:
 			sock.SendLine("");
 
 			//Küldjönk el és recv-eljünk mindent (kapcsolatzárásig)
-			while(!sock.error)
+			while(!sock.GetError())
 			{
 					sock.Update();
 					Sleep(1);
