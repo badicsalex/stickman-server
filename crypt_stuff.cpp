@@ -453,7 +453,7 @@ std::string Base64Encode(const unsigned char* bytes_to_encode, unsigned int in_l
 	ret.reserve(in_len*3/4+3); //reservelünk valamennyit, hogy a += gyors legyen
 	int i = 0;
 	int j = 0;
-	unsigned const char* char_array_3;
+	unsigned const char* char_array_3=0;
 	unsigned char char_array_4[4];
 
 	while (in_len--) {
