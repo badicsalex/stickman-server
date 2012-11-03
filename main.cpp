@@ -1,4 +1,3 @@
-#define _CRT_SECURE_NO_WARNINGS
 #include "socket_stuff.h"
 #include "crypt_stuff.h"
 #include "standard_stuff.h"
@@ -20,7 +19,7 @@
 
 #include <sys/time.h>
 
-int GetTickCount()
+unsigned GetTickCount()
 {
 	timespec tim;
 	clock_gettime(CLOCK_MONOTONIC,&tim);
@@ -99,6 +98,25 @@ const struct TConfig{
 	}
 } config("config.cfg");
 
+struct TKill{
+	TKill(){
+		for(int i=0;i<8;++i)
+			data[i]=0;
+	}
+	TKill(const TKill& honnan){
+		for(int i=0;i<8;++i)
+			data[i]=honnan.data[i];
+	}
+	TKill& operator=(const TKill& honnan){
+		for(int i=0;i<8;++i)
+			data[i]=honnan[i];
+		return *this;
+	}
+	int& operator[](int index){return data[index];}
+	const int& operator[](int index) const {return data[index];}
+private:
+	int data[8];
+};
 
 struct T1v1Game{
 	string kihivoNev,ellenfelNev;
@@ -118,7 +136,7 @@ struct TStickContext{
 	unsigned long ip;
 	unsigned short port;
 	int kills; //mai napon
-	int checksum;
+	unsigned checksum;
 	int nyelv;
 	bool admin;
 	bool kihivo;
@@ -272,7 +290,7 @@ protected:
 	TUDPSocket udp;
 
 	map<string,TStickRecord> db;
-	map<string,int*> killdb;
+	map<string,TKill> killdb;
 
 	map<string,string> bans;
 
@@ -282,11 +300,11 @@ protected:
 
 	unsigned int lastUID;
 	unsigned int lastUDB;
-	unsigned int lastweather;
 	unsigned int nextevent;
 
 	time_t lastUDBsuccess;
-
+	
+	unsigned int lastweather;
 	int weathermost;
 	int weathercel;
 	unsigned int laststatusfile;
@@ -294,8 +312,8 @@ protected:
 
 	TMySocket* getSocketByName(const string nev)
 	{
-		for (int a=0;a<socketek.size();a++)
-			if (socketek[a]->context.nev==nev) return socketek[a];
+		for (unsigned i=0;i<socketek.size();i++)
+			if (socketek[i]->context.nev==nev) return socketek[i];
 		return 0;
 	}
 
@@ -321,7 +339,7 @@ protected:
 	{
 		cout << sock.context.nev << " lecsatlakozott \n";
 		TMySocket *so;
-		for (int i=0;i<challenges.size();i++)
+		for (unsigned i=0;i<challenges.size();i++)
 		{
 			if ((getSocketByName(challenges[i].ellenfelNev)==&sock) && challenges[i].allapot!=VEGE)
 			{
@@ -337,7 +355,7 @@ protected:
 			}
 		}
 
-		for (int i=0;i<challenges.size();i++)
+		for (unsigned i=0;i<challenges.size();i++)
 		{
 			if (getSocketByName(challenges[i].kihivoNev)==&sock && challenges[i].allapot!=VEGE)
 			{
@@ -369,15 +387,15 @@ protected:
 	{
 		TSocketFrame frame;
 		frame.WriteChar(SERVERMSG_PLAYERLIST);
-		int n=socketek.size();
-		int n2=0;
-		for(int i=0;i<n;++i)
+		unsigned n=socketek.size();
+		unsigned n2=0;
+		for(unsigned i=0;i<n;++i)
 			if( sock.context.realm   ==socketek[i]->context.realm &&
 				sock.context.checksum==socketek[i]->context.checksum)
 				++n2;
 		frame.WriteInt(n2);
 		/*!TODO legközelebbi 50 kiválasztása */
-		for(int i=0;i<n;++i)
+		for(unsigned i=0;i<n;++i)
 		if( sock.context.realm   ==socketek[i]->context.realm &&
 			sock.context.checksum==socketek[i]->context.checksum)
 		{
@@ -488,7 +506,7 @@ protected:
 			return;
 		}
 		string& nev=sock.context.nev=msg.ReadString();
-		int n=nev.length();
+		unsigned n=nev.length();
 		if (n==0)
 		{
 			SendKick(sock,lang(nyelv,3),false);
@@ -499,7 +517,7 @@ protected:
 			SendKick(sock,lang(nyelv,4),false);
 			return;
 		}
-		for(int i=0;i<n;++i)
+		for(unsigned i=0;i<n;++i)
 			if (config.allowedchars.find(nev[i])==string::npos)
 			{
 				SendKick(sock,lang(nyelv,5),false);
@@ -507,7 +525,7 @@ protected:
 			}
 
 		bool isadmin = false;
-		for (int i = 0; i<config.adminok.size();i++)
+		for (unsigned i = 0; i<config.adminok.size();i++)
 			if (nev==config.adminok[i]) 
 			{
 				isadmin = true;
@@ -554,7 +572,7 @@ protected:
 			}
 
 			// anti multi
-			for (int i = 0; i<socketek.size();i++)
+			for (unsigned i = 0; i<socketek.size();i++)
 			if (socketek[i]->context.nev==nev && socketek[i]->context.UID!=sock.context.UID)
 			{
 				SendKick(sock,lang(nyelv,37),false);
@@ -594,7 +612,7 @@ protected:
 
 		sock.context.glyph=0;
 		n=nev.length();
-		for(int i=0;i<n;++i)
+		for(unsigned i=0;i<n;++i)
 		{
 			sock.context.glyph*=982451653;
 			sock.context.glyph+=nev[i];
@@ -706,7 +724,7 @@ protected:
 							 (sock.context.fegyver>127 && socketek[i]->context.fegyver<127) )
 						{
 
-							for (int c=0;c<challenges.size();c++)
+							for (unsigned c=0;c<challenges.size();c++)
 							{
 								if ( challenges[c].ellenfelNev==kinek)
 									challenges.erase(challenges.begin()+c);
@@ -736,7 +754,7 @@ protected:
 		if (command=="accept")
 		{
 
-			for (int i=0;i<challenges.size();i++)
+			for (unsigned i=0;i<challenges.size();i++)
 				if (challenges[i].ellenfelNev==sock.context.nev && challenges[i].allapot==VARAKOZAS)
 				{
 					T1v1Game* chall = &challenges[i];
@@ -744,8 +762,8 @@ protected:
 
 					
 					
-					int n=socketek.size();
-					for(int a=0;a<n;++a)
+					unsigned n=socketek.size();
+					for(unsigned a=0;a<n;++a)
 						if (socketek[a]->context.nev==chall->kihivoNev)
 						{
 							SendChallenge(*socketek[a],sock.context.nev,true);
@@ -778,17 +796,17 @@ protected:
 		if (command=="weather")
 		{
 			weathermost=weathercel=atoi(parameter.c_str());
-			int n=socketek.size();
-			for(int i=0;i<n;++i)
+			unsigned n=socketek.size();
+			for(unsigned i=0;i<n;++i)
 				SendWeather(*socketek[i],weathermost);
 		}else	
 		if (command=="kick" || command=="ban")
 		{
-			int n=socketek.size();
+			unsigned n=socketek.size();
 			bool kick=command=="kick";
 			int kickuid=atoi(parameter.c_str());
 			if (!kickuid)
-				for(int i=0;i<n;++i)
+				for(unsigned i=0;i<n;++i)
 					if (socketek[i]->context.nev==parameter)
 						kickuid=socketek[i]->context.UID;
 
@@ -799,7 +817,7 @@ protected:
 			else
 				uzenet=lang(sock.context.nyelv,19); //lol lang specifikus default kick
 			
-			for(int i=0;i<n;++i)
+			for(unsigned i=0;i<n;++i)
 				if (socketek[i]->context.UID==kickuid)
 				{
 					SendKick(*socketek[i],sock.context.nev+lang(sock.context.nyelv,kick?20:35)+uzenet,true);
@@ -991,8 +1009,8 @@ protected:
 			return;
 		}
 
-		int n=socketek.size();
-		for(int i=0;i<n;++i)
+		unsigned n=socketek.size();
+		for(unsigned i=0;i<n;++i)
 		if (socketek[i]->context.UID==UID &&
 			socketek[i]->context.loggedin)
 		{
@@ -1002,7 +1020,7 @@ protected:
 
 				T1v1Game* chall = 0;
 
-				for (int a=0; a<challenges.size();a++)
+				for (unsigned a=0; a<challenges.size();a++)
 				{
 					if ((challenges[a].ellenfelNev==socketek[i]->context.nev || challenges[a].kihivoNev==socketek[i]->context.nev) && challenges[a].allapot==FOLYAMATBAN)
 					{
@@ -1060,9 +1078,6 @@ protected:
 						killdb[nev_lower][fegyvtoint(socketek[i]->context.fegyver)]+=1;
 					else
 					{
-						int* h = new int[8];
-						for (int a=0;a<8;a++) h[a]=0;
-						killdb[nev_lower] = h;
 						killdb[nev_lower][fegyvtoint(socketek[i]->context.fegyver)]=1;
 					}
 					db[nev_lower].napikill+=1;
@@ -1103,8 +1118,8 @@ protected:
 
 	void StartEvent(const string &nev)
 	{
-		int n=socketek.size();
-		for(int i=0;i<n;++i)
+		unsigned n=socketek.size();
+		for(unsigned i=0;i<n;++i)
 			if (socketek[i]->context.loggedin)
 			{
 				AddMedal(*socketek[i],'S'|('P'<<8));
@@ -1123,7 +1138,7 @@ protected:
 
 			string postmsg;
 			postmsg.reserve(64*1024);
-			for(map<string,int*>::iterator i=killdb.begin();i!=killdb.end();++i)
+			for(map<string,TKill>::iterator i=killdb.begin();i!=killdb.end();++i)
 			{
 				const string& nev=i->first;
 				postmsg+=nev+"\r\n";
@@ -1137,19 +1152,20 @@ protected:
 				postmsg+="\r\n";
 			}
 			postmsg+="1v1data\r\n";
-			for (int a=0;a<challenges.size();a++)
+			for (unsigned a=0;a<challenges.size();a++)
 				if (challenges[a].allapot==VEGE)
 			{
 				postmsg+=challenges[a].kihivoNev+"\r\n";
 				postmsg+=challenges[a].ellenfelNev+"\r\n";
-				postmsg+=challenges[a].kihivoPont+"\r\n";
-				postmsg+=challenges[a].ellenfelPont+"\r\n";
+				postmsg+=itoa(challenges[a].kihivoPont)+"\r\n";
+				postmsg+=itoa(challenges[a].ellenfelPont)+"\r\n";
 			}
-			for (int a=0;a<challenges.size();a++)
+			for (unsigned a=0;a<challenges.size();a++)
 				if (challenges[a].allapot==VEGE)
 				{
 					challenges[a] = challenges.back();
 					challenges.pop_back();
+					--a;
 				}
 
 			sock.SendLine("POST "+config.webinterfaceup+" HTTP/1.1");
