@@ -19,7 +19,7 @@
 
 #include <sys/time.h>
 
-unsigned GetTickCount()
+unsigned long long GetTickCount64()
 {
 	timespec tim;
 	clock_gettime(CLOCK_MONOTONIC,&tim);
@@ -144,15 +144,15 @@ struct TStickContext{
 
 	/* állapot */
 	int glyph;
-	unsigned int lastrecv; //utolsó fogadott csomag
-	unsigned int lastsend; //utolsó küldött playerlista
-	unsigned int lastudpquery; //utolsó kérés hogy kliens küldjön UDP-t
+	unsigned long long int lastrecv; //utolsó fogadott csomag
+	unsigned long long int lastsend; //utolsó küldött playerlista
+	unsigned long long int lastudpquery; //utolsó kérés hogy kliens küldjön UDP-t
 	bool gotudp; //kaptunk UDP csomagot a port javításhoz.
 	int udpauth;
 	bool loggedin;
 	int x,y;
 	unsigned char crypto[20];
-	unsigned int floodtime;
+	unsigned long long int floodtime;
 	string realm;
 	int lastwhisp;
 };
@@ -298,16 +298,16 @@ protected:
 
 	vector<T1v1Game> challenges;
 
-	unsigned int lastUID;
-	unsigned int lastUDB;
-	unsigned int nextevent;
+	unsigned long long int lastUID;
+	unsigned long long int lastUDB;
+	unsigned long long int nextevent;
 
 	time_t lastUDBsuccess;
 	
-	unsigned int lastweather;
+	unsigned long long int lastweather;
 	int weathermost;
 	int weathercel;
-	unsigned int laststatusfile;
+	unsigned long long int laststatusfile;
 
 
 	TMySocket* getSocketByName(const string nev)
@@ -324,7 +324,7 @@ protected:
  		sock.context.UID=++lastUID;
 		for(int i=0;i<20;++i)
 			sock.context.crypto[i]=(unsigned char)rand();
-		sock.context.lastrecv=GetTickCount();
+		sock.context.lastrecv=GetTickCount64();
 		sock.context.lastsend=0;
 		sock.context.lastudpquery=0; //utolsó kérés hogy kliens küldjön UDP-t
 		sock.context.gotudp=false; //ennyit várunk a következõ kérésig
@@ -921,11 +921,11 @@ protected:
 			return;
 
 		//flood ellenorzes
-		if (sock.context.floodtime<GetTickCount()-12000)
-			sock.context.floodtime=GetTickCount()-10000;
+		if (sock.context.floodtime<GetTickCount64()-12000)
+			sock.context.floodtime=GetTickCount64()-10000;
 		else
 			sock.context.floodtime+=2000;
-		if (sock.context.floodtime>GetTickCount())
+		if (sock.context.floodtime>GetTickCount64())
 		{
 			SendKick(sock,lang(sock.context.nyelv,24),true);
 			return;
@@ -1278,10 +1278,10 @@ protected:
 				default:
 					SendKick(sock,lang(sock.context.nyelv,32),true);
 			}
-			sock.context.lastrecv=GetTickCount();
+			sock.context.lastrecv=GetTickCount64();
 		}
 
-		unsigned int gtc=GetTickCount();
+		unsigned long long int gtc=GetTickCount64();
 		/* 2000-2500 msenként küldünk playerlistát */
 		if (sock.context.loggedin &&
 			sock.context.lastsend<gtc-2000-(rand()&511))
@@ -1321,7 +1321,7 @@ public:
 			int medalid=buffer1[0] | (buffer1[1]<<8);
 			medalnevek[medalid]=string(buffer2);
 		}
-		nextevent=GetTickCount()+24*3600*1000;
+		nextevent=GetTickCount64()+24*3600*1000;
 	}
 
 	void Update()
@@ -1350,10 +1350,10 @@ public:
 
 
 
-		if (lastUDB<GetTickCount()-300000)//5 percenként.
+		if (lastUDB<GetTickCount64()-300000)//5 percenként.
 		{
 			UpdateDb();
-			lastUDB=GetTickCount();
+			lastUDB=GetTickCount64();
 
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
@@ -1363,7 +1363,7 @@ public:
 
 		TBufferedServer<TStickContext>::Update();
 
-		if (lastweather<GetTickCount()-60000)//percenként
+		if (lastweather<GetTickCount64()-60000)//percenként
 		{
 			if (weathermost==weathercel)
 				weathercel=rand()%23;
@@ -1376,18 +1376,18 @@ public:
 			for(int i=0;i<n;++i)
 				if (socketek[i]->context.loggedin)
 					SendWeather(*socketek[i],weathermost);
-			lastweather=GetTickCount();
+			lastweather=GetTickCount64();
 		}
-		if (laststatusfile<GetTickCount()-60000)//percenként
+		if (laststatusfile<GetTickCount64()-60000)//percenként
 		{
 			ofstream fil("status");
 			fil<<socketek.size();
-			laststatusfile=GetTickCount();
+			laststatusfile=GetTickCount64();
 		}
-		if (nextevent<GetTickCount())
+		if (nextevent<GetTickCount64())
 		{
 			StartEvent("spaceship");
-			nextevent=GetTickCount()+12*3600*1000+rand()%(24*3600*1000);
+			nextevent=GetTickCount64()+12*3600*1000+rand()%(24*3600*1000);
 		}
 	}
 };
