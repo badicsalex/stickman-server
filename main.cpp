@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include "socket_stuff.h"
 #include "crypt_stuff.h"
 #include "standard_stuff.h"
@@ -19,7 +20,7 @@
 
 #include <sys/time.h>
 
-unsigned long long GetTickCount64()
+int GetTickCount()
 {
 	timespec tim;
 	clock_gettime(CLOCK_MONOTONIC,&tim);
@@ -98,25 +99,6 @@ const struct TConfig{
 	}
 } config("config.cfg");
 
-struct TKill{
-	TKill(){
-		for(int i=0;i<8;++i)
-			data[i]=0;
-	}
-	TKill(const TKill& honnan){
-		for(int i=0;i<8;++i)
-			data[i]=honnan.data[i];
-	}
-	TKill& operator=(const TKill& honnan){
-		for(int i=0;i<8;++i)
-			data[i]=honnan[i];
-		return *this;
-	}
-	int& operator[](int index){return data[index];}
-	const int& operator[](int index) const {return data[index];}
-private:
-	int data[8];
-};
 
 struct T1v1Game{
 	string kihivoNev,ellenfelNev;
@@ -136,7 +118,7 @@ struct TStickContext{
 	unsigned long ip;
 	unsigned short port;
 	int kills; //mai napon
-	unsigned checksum;
+	int checksum;
 	int nyelv;
 	bool admin;
 	bool kihivo;
@@ -144,15 +126,15 @@ struct TStickContext{
 
 	/* állapot */
 	int glyph;
-	unsigned long long int lastrecv; //utolsó fogadott csomag
-	unsigned long long int lastsend; //utolsó küldött playerlista
-	unsigned long long int lastudpquery; //utolsó kérés hogy kliens küldjön UDP-t
+	unsigned int lastrecv; //utolsó fogadott csomag
+	unsigned int lastsend; //utolsó küldött playerlista
+	unsigned int lastudpquery; //utolsó kérés hogy kliens küldjön UDP-t
 	bool gotudp; //kaptunk UDP csomagot a port javításhoz.
 	int udpauth;
 	bool loggedin;
 	int x,y;
 	unsigned char crypto[20];
-	unsigned long long int floodtime;
+	unsigned int floodtime;
 	string realm;
 	int lastwhisp;
 };
@@ -290,7 +272,7 @@ protected:
 	TUDPSocket udp;
 
 	map<string,TStickRecord> db;
-	map<string,TKill> killdb;
+	map<string,int*> killdb;
 
 	map<string,string> bans;
 
@@ -298,22 +280,22 @@ protected:
 
 	vector<T1v1Game> challenges;
 
-	unsigned long long int lastUID;
-	unsigned long long int lastUDB;
-	unsigned long long int nextevent;
+	unsigned int lastUID;
+	unsigned int lastUDB;
+	unsigned int lastweather;
+	unsigned int nextevent;
 
 	time_t lastUDBsuccess;
-	
-	unsigned long long int lastweather;
+
 	int weathermost;
 	int weathercel;
-	unsigned long long int laststatusfile;
+	unsigned int laststatusfile;
 
 
 	TMySocket* getSocketByName(const string nev)
 	{
-		for (unsigned i=0;i<socketek.size();i++)
-			if (socketek[i]->context.nev==nev) return socketek[i];
+		for (int a=0;a<socketek.size();a++)
+			if (socketek[a]->context.nev==nev) return socketek[a];
 		return 0;
 	}
 
@@ -324,7 +306,7 @@ protected:
  		sock.context.UID=++lastUID;
 		for(int i=0;i<20;++i)
 			sock.context.crypto[i]=(unsigned char)rand();
-		sock.context.lastrecv=GetTickCount64();
+		sock.context.lastrecv=GetTickCount();
 		sock.context.lastsend=0;
 		sock.context.lastudpquery=0; //utolsó kérés hogy kliens küldjön UDP-t
 		sock.context.gotudp=false; //ennyit várunk a következõ kérésig
@@ -338,39 +320,11 @@ protected:
 	virtual void OnBeforeDelete(TMySocket& sock)
 	{
 		cout << sock.context.nev << " lecsatlakozott \n";
-		TMySocket *so;
-		for (unsigned i=0;i<challenges.size();i++)
+		for (int i=0;i<challenges.size();i++)
 		{
-			if ((getSocketByName(challenges[i].ellenfelNev)==&sock) && challenges[i].allapot!=VEGE)
-			{
-				so = getSocketByName(challenges[i].kihivoNev);
-				if (so) 
-				{
-					so->context.realm="";
-					so->context.is1v1=false;
-					SendChat(*so,lang(so->context.nyelv,45));
-					SendChallenge(*so,"",2);
-				}
+			if ((!getSocketByName(challenges[i].ellenfelNev) || ! getSocketByName(challenges[i].kihivoNev)) && challenges[i].allapot!=VEGE)
 				challenges.erase(challenges.begin()+i);
-			}
 		}
-
-		for (unsigned i=0;i<challenges.size();i++)
-		{
-			if (getSocketByName(challenges[i].kihivoNev)==&sock && challenges[i].allapot!=VEGE)
-			{
-				so = getSocketByName(challenges[i].ellenfelNev);
-				if (so) 
-				{
-					so->context.realm="";
-					so->context.is1v1=false;
-					SendChat(*so,lang(so->context.nyelv,45));
-					SendChallenge(*so,"",2);
-				}
-				challenges.erase(challenges.begin()+i);
-			}
-		}
-
 	}
 	
 	void SendKick(TMySocket& sock,const string& indok="Kicked without reason",bool hard=false)
@@ -387,15 +341,15 @@ protected:
 	{
 		TSocketFrame frame;
 		frame.WriteChar(SERVERMSG_PLAYERLIST);
-		unsigned n=socketek.size();
-		unsigned n2=0;
-		for(unsigned i=0;i<n;++i)
+		int n=socketek.size();
+		int n2=0;
+		for(int i=0;i<n;++i)
 			if( sock.context.realm   ==socketek[i]->context.realm &&
 				sock.context.checksum==socketek[i]->context.checksum)
 				++n2;
 		frame.WriteInt(n2);
 		/*!TODO legközelebbi 50 kiválasztása */
-		for(unsigned i=0;i<n;++i)
+		for(int i=0;i<n;++i)
 		if( sock.context.realm   ==socketek[i]->context.realm &&
 			sock.context.checksum==socketek[i]->context.checksum)
 		{
@@ -492,6 +446,12 @@ protected:
 		
 		sock.context.is1v1 = false;
 		
+		// anti multi
+		int n=socketek.size();
+		for (int a = 0; a<socketek.size();a++)
+			if (socketek[a]->context.nev==sock.context.nev && socketek[a]->context.UID!=sock.context.UID)
+				SendKick(sock,lang(nyelv,37),true);
+
 		if (!lang.HasLang(nyelv))
 			nyelv=0;
 
@@ -506,8 +466,8 @@ protected:
 			return;
 		}
 		string& nev=sock.context.nev=msg.ReadString();
-		unsigned n=nev.length();
-		if (n==0)
+		int nn=nev.length();
+		if (nn==0)
 		{
 			SendKick(sock,lang(nyelv,3),false);
 			return;
@@ -517,20 +477,20 @@ protected:
 			SendKick(sock,lang(nyelv,4),false);
 			return;
 		}
-		for(unsigned i=0;i<n;++i)
+		for(int i=0;i<n;++i)
 			if (config.allowedchars.find(nev[i])==string::npos)
 			{
 				SendKick(sock,lang(nyelv,5),false);
 				return;
 			}
-
+		
 		bool isadmin = false;
-		for (unsigned i = 0; i<config.adminok.size();i++)
-			if (nev==config.adminok[i]) 
-			{
+		for (int a = 0; a<config.adminok.size();a++)
+			if (sock.context.nev==config.adminok[a]) 
+				{
 				isadmin = true;
 				break;
-			}
+				}
 		sock.context.admin = isadmin;
 
 
@@ -549,7 +509,7 @@ protected:
 		}
 		int ip=sock.context.ip;
 		cout<<"Login "<<sock.context.nev<<" from "<<((ip)&0xff)<<"."<<((ip>>8)&0xff)<<"."<<((ip>>16)&0xff)<<"."<<((ip>>24)&0xff)<<endl;
-
+		
 		if(bans.count(nev))
 		{
 				SendKick(sock,lang(nyelv,34)+bans[nev],false);
@@ -570,23 +530,12 @@ protected:
 				SendKick(sock,lang(nyelv,7),false);
 				return;
 			}
-
-			// anti multi
-			for (unsigned i = 0; i<socketek.size();i++)
-			if (socketek[i]->context.nev==nev && socketek[i]->context.UID!=sock.context.UID)
-			{
-				SendKick(sock,lang(nyelv,37),false);
-				return;
-			}
-
-
-
 			sock.context.clan=record.clan;
 			sock.context.registered=true;
-
+			
 			const string nev_lower=config.ToLowercase(sock.context.nev);
 			if (killdb.count(nev_lower))
-				if (sock.context.fegyver==record.fegyv)
+				if (sock.context.fegyver=record.fegyv)
 					record.kills=killdb[nev_lower][fegyvtoint(sock.context.fegyver)];
 			SendLoginOk(sock);
 			string chatuzi="\x11\x01"+lang(nyelv,8)+"\x11\x03"+nev+"\x11\x01"+lang(nyelv,9);
@@ -612,7 +561,7 @@ protected:
 
 		sock.context.glyph=0;
 		n=nev.length();
-		for(unsigned i=0;i<n;++i)
+		for(int i=0;i<n;++i)
 		{
 			sock.context.glyph*=982451653;
 			sock.context.glyph+=nev[i];
@@ -644,11 +593,11 @@ protected:
 			sock.context.realm=parameter;
 			SendChat(sock,lang(sock.context.nyelv,16)+parameter+lang(sock.context.nyelv,17));
 		}else
-			if ((command=="norealm" || (command=="realm" && parameter.size()==0)) && !sock.context.is1v1)
+		if (command=="norealm" || (command=="realm" && parameter.size()==0))
 		{
 			sock.context.realm="";
 			SendChat(sock,lang(sock.context.nyelv,18));
-
+			sock.context.is1v1=false;
 		}else
 		if (command=="w" || command=="whisper")
 		{
@@ -724,10 +673,10 @@ protected:
 							 (sock.context.fegyver>127 && socketek[i]->context.fegyver<127) )
 						{
 
-							for (unsigned c=0;c<challenges.size();c++)
+							for (int i=0;i<challenges.size();i++)
 							{
-								if ( challenges[c].ellenfelNev==kinek)
-									challenges.erase(challenges.begin()+c);
+								if ( challenges[i].ellenfelNev==kinek)
+									challenges.erase(challenges.begin()+i);
 							}
 
 							T1v1Game chall;
@@ -754,7 +703,7 @@ protected:
 		if (command=="accept")
 		{
 
-			for (unsigned i=0;i<challenges.size();i++)
+			for (int i=0;i<challenges.size();i++)
 				if (challenges[i].ellenfelNev==sock.context.nev && challenges[i].allapot==VARAKOZAS)
 				{
 					T1v1Game* chall = &challenges[i];
@@ -762,8 +711,8 @@ protected:
 
 					
 					
-					unsigned n=socketek.size();
-					for(unsigned a=0;a<n;++a)
+					int n=socketek.size();
+					for(int a=0;a<n;++a)
 						if (socketek[a]->context.nev==chall->kihivoNev)
 						{
 							SendChallenge(*socketek[a],sock.context.nev,true);
@@ -796,17 +745,17 @@ protected:
 		if (command=="weather")
 		{
 			weathermost=weathercel=atoi(parameter.c_str());
-			unsigned n=socketek.size();
-			for(unsigned i=0;i<n;++i)
+			int n=socketek.size();
+			for(int i=0;i<n;++i)
 				SendWeather(*socketek[i],weathermost);
 		}else	
 		if (command=="kick" || command=="ban")
 		{
-			unsigned n=socketek.size();
+			int n=socketek.size();
 			bool kick=command=="kick";
 			int kickuid=atoi(parameter.c_str());
 			if (!kickuid)
-				for(unsigned i=0;i<n;++i)
+				for(int i=0;i<n;++i)
 					if (socketek[i]->context.nev==parameter)
 						kickuid=socketek[i]->context.UID;
 
@@ -817,7 +766,7 @@ protected:
 			else
 				uzenet=lang(sock.context.nyelv,19); //lol lang specifikus default kick
 			
-			for(unsigned i=0;i<n;++i)
+			for(int i=0;i<n;++i)
 				if (socketek[i]->context.UID==kickuid)
 				{
 					SendKick(*socketek[i],sock.context.nev+lang(sock.context.nyelv,kick?20:35)+uzenet,true);
@@ -921,11 +870,11 @@ protected:
 			return;
 
 		//flood ellenorzes
-		if (sock.context.floodtime<GetTickCount64()-12000)
-			sock.context.floodtime=GetTickCount64()-10000;
+		if (sock.context.floodtime<GetTickCount()-12000)
+			sock.context.floodtime=GetTickCount()-10000;
 		else
 			sock.context.floodtime+=2000;
-		if (sock.context.floodtime>GetTickCount64())
+		if (sock.context.floodtime>GetTickCount())
 		{
 			SendKick(sock,lang(sock.context.nyelv,24),true);
 			return;
@@ -1009,8 +958,8 @@ protected:
 			return;
 		}
 
-		unsigned n=socketek.size();
-		for(unsigned i=0;i<n;++i)
+		int n=socketek.size();
+		for(int i=0;i<n;++i)
 		if (socketek[i]->context.UID==UID &&
 			socketek[i]->context.loggedin)
 		{
@@ -1020,7 +969,7 @@ protected:
 
 				T1v1Game* chall = 0;
 
-				for (unsigned a=0; a<challenges.size();a++)
+				for (int a=0; a<challenges.size();a++)
 				{
 					if ((challenges[a].ellenfelNev==socketek[i]->context.nev || challenges[a].kihivoNev==socketek[i]->context.nev) && challenges[a].allapot==FOLYAMATBAN)
 					{
@@ -1078,6 +1027,9 @@ protected:
 						killdb[nev_lower][fegyvtoint(socketek[i]->context.fegyver)]+=1;
 					else
 					{
+						int* h = new int[8];
+						for (int a=0;a<8;a++) h[a]=0;
+						killdb[nev_lower] = h;
 						killdb[nev_lower][fegyvtoint(socketek[i]->context.fegyver)]=1;
 					}
 					db[nev_lower].napikill+=1;
@@ -1118,8 +1070,8 @@ protected:
 
 	void StartEvent(const string &nev)
 	{
-		unsigned n=socketek.size();
-		for(unsigned i=0;i<n;++i)
+		int n=socketek.size();
+		for(int i=0;i<n;++i)
 			if (socketek[i]->context.loggedin)
 			{
 				AddMedal(*socketek[i],'S'|('P'<<8));
@@ -1138,7 +1090,7 @@ protected:
 
 			string postmsg;
 			postmsg.reserve(64*1024);
-			for(map<string,TKill>::iterator i=killdb.begin();i!=killdb.end();++i)
+			for(map<string,int*>::iterator i=killdb.begin();i!=killdb.end();++i)
 			{
 				const string& nev=i->first;
 				postmsg+=nev+"\r\n";
@@ -1152,20 +1104,19 @@ protected:
 				postmsg+="\r\n";
 			}
 			postmsg+="1v1data\r\n";
-			for (unsigned a=0;a<challenges.size();a++)
+			for (int a=0;a<challenges.size();a++)
 				if (challenges[a].allapot==VEGE)
 			{
 				postmsg+=challenges[a].kihivoNev+"\r\n";
 				postmsg+=challenges[a].ellenfelNev+"\r\n";
-				postmsg+=itoa(challenges[a].kihivoPont)+"\r\n";
-				postmsg+=itoa(challenges[a].ellenfelPont)+"\r\n";
+				postmsg+=challenges[a].kihivoPont+"\r\n";
+				postmsg+=challenges[a].ellenfelPont+"\r\n";
 			}
-			for (unsigned a=0;a<challenges.size();a++)
+			for (int a=0;a<challenges.size();a++)
 				if (challenges[a].allapot==VEGE)
 				{
 					challenges[a] = challenges.back();
 					challenges.pop_back();
-					--a;
 				}
 
 			sock.SendLine("POST "+config.webinterfaceup+" HTTP/1.1");
@@ -1177,7 +1128,7 @@ protected:
 			sock.SendLine(postmsg);
 			
 			string lin;
-			while(!sock.GetError())
+			while(!sock.error)
 			{
 					sock.Update();
 					Sleep(1);
@@ -1203,7 +1154,7 @@ protected:
 			sock.SendLine("");
 
 			//Küldjönk el és recv-eljünk mindent (kapcsolatzárásig)
-			while(!sock.GetError())
+			while(!sock.error)
 			{
 					sock.Update();
 					Sleep(1);
@@ -1278,10 +1229,10 @@ protected:
 				default:
 					SendKick(sock,lang(sock.context.nyelv,32),true);
 			}
-			sock.context.lastrecv=GetTickCount64();
+			sock.context.lastrecv=GetTickCount();
 		}
 
-		unsigned long long int gtc=GetTickCount64();
+		unsigned int gtc=GetTickCount();
 		/* 2000-2500 msenként küldünk playerlistát */
 		if (sock.context.loggedin &&
 			sock.context.lastsend<gtc-2000-(rand()&511))
@@ -1321,7 +1272,7 @@ public:
 			int medalid=buffer1[0] | (buffer1[1]<<8);
 			medalnevek[medalid]=string(buffer2);
 		}
-		nextevent=GetTickCount64()+24*3600*1000;
+		nextevent=GetTickCount()+24*3600*1000;
 	}
 
 	void Update()
@@ -1350,10 +1301,10 @@ public:
 
 
 
-		if (lastUDB<GetTickCount64()-300000)//5 percenként.
+		if (lastUDB<GetTickCount()-300000)//5 percenként.
 		{
 			UpdateDb();
-			lastUDB=GetTickCount64();
+			lastUDB=GetTickCount();
 
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
@@ -1363,7 +1314,7 @@ public:
 
 		TBufferedServer<TStickContext>::Update();
 
-		if (lastweather<GetTickCount64()-60000)//percenként
+		if (lastweather<GetTickCount()-60000)//percenként
 		{
 			if (weathermost==weathercel)
 				weathercel=rand()%23;
@@ -1376,18 +1327,18 @@ public:
 			for(int i=0;i<n;++i)
 				if (socketek[i]->context.loggedin)
 					SendWeather(*socketek[i],weathermost);
-			lastweather=GetTickCount64();
+			lastweather=GetTickCount();
 		}
-		if (laststatusfile<GetTickCount64()-60000)//percenként
+		if (laststatusfile<GetTickCount()-60000)//percenként
 		{
 			ofstream fil("status");
 			fil<<socketek.size();
-			laststatusfile=GetTickCount64();
+			laststatusfile=GetTickCount();
 		}
-		if (nextevent<GetTickCount64())
+		if (nextevent<GetTickCount())
 		{
 			StartEvent("spaceship");
-			nextevent=GetTickCount64()+12*3600*1000+rand()%(24*3600*1000);
+			nextevent=GetTickCount()+12*3600*1000+rand()%(24*3600*1000);
 		}
 	}
 };
@@ -1399,7 +1350,7 @@ int main(){
 	#endif
 	cout<<"Stickserver starting..."<<endl;
 	{
-		StickmanServer server(25252);
+		StickmanServer server(25565);
 		while(1)
 		{
 			server.Update();
