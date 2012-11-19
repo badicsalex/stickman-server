@@ -353,7 +353,7 @@ protected:
 					SendChallenge(*so,"",2);
 				}
 				if (challenges[i].kihivoPont>=challenges[i].ellenfelPont*1.5 && challenges[i].kihivoPont>=5)
-					challenges[i].allapot==VEGE;
+					challenges[i].allapot=VEGE;
 				else
 				challenges.erase(challenges.begin()+i);
 			}
@@ -372,7 +372,7 @@ protected:
 					SendChallenge(*so,"",2);
 				}
 				if (challenges[i].ellenfelPont>=challenges[i].kihivoPont*1.5 && challenges[i].ellenfelPont>=5)
-					challenges[i].allapot==VEGE;
+					challenges[i].allapot=VEGE;
 				else
 				challenges.erase(challenges.begin()+i);
 			}
