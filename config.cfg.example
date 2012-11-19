@@ -1,9 +1,9 @@
-20104
-29FC298F
-01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14
+20401
+EDBC8700
+ab ba aa bb 12 21 11 22 cd dc cc dd 67 76 66 77 ef fe ee ff
 stickman.hu
-/webinterface.php?mode=down
-/webinterface.php?mode=up&lastupdate=%lu
+/serverinterfaced.php?auth=telefonkozpont&mikor=%lu
+/serverinterfaceu.php?auth=telefonkozpont
 Admin,Hector,Bolint99
 abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890αινσφυϊόϋΑΙΝΣΦΥΪάΫ{}[]()_-:|=;*
 abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890αινσφυϊόϋαινσφυϊόϋ{}[]()_-:|=;*
