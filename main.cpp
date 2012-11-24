@@ -806,7 +806,8 @@ protected:
 				{
 					//üzenetek
 					TMySocket *kihivo = getSocketByName(challenges[i].kihivoNev);
-					SendChat(*kihivo,sock.context.nev+lang(kihivo->context.nyelv,46));
+					if (kihivo)
+						SendChat(*kihivo,sock.context.nev+lang(kihivo->context.nyelv,46));
 					SendChallenge(sock,"",2);
 					//törlés
 
