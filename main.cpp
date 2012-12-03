@@ -39,7 +39,7 @@ typedef unsigned short WORD;
 using namespace std;
 
 
-const struct TConfig{
+ struct TConfig{
 	int clientversion;				//kliens verzió, ez alatt kickel
 	unsigned int datachecksum;
 	unsigned char sharedkey[20];	//a killenkénti kriptográfiai aláírás kulcsa
@@ -51,10 +51,17 @@ const struct TConfig{
 	vector<string> csunyaszavak;	//cenzúrázandó szavak
 	vector<string> viragnevek;		//amivel lecseréljük a cenzúrázandó szavakat.
 	vector<string> adminok;			//adminok listája
-	string scriptfile;				//a scriptfajl helye
+	string cfgsource;				//a config fájl helye
+
 	TConfig(const string& honnan)
 	{
-		ifstream fil(honnan.c_str());
+		cfgsource=honnan;
+		reload();
+	}
+
+	void reload()
+	{
+		ifstream fil(cfgsource.c_str());
 		fil>>clientversion;
 		fil>>hex>>datachecksum;
 		for(int i=0;i<20;++i)
@@ -82,8 +89,6 @@ const struct TConfig{
 
 		fil>>tmpstr; 
 		viragnevek=explode(tmpstr,",");
-		
-		fil>>scriptfile;
 	}
 
 	const string ToLowercase(const string& mit) const
@@ -141,6 +146,7 @@ struct TStickContext{
 	bool admin;
 	bool kihivo;
 	bool is1v1;
+	bool verified;
 
 	/* állapot */
 	int glyph;
@@ -322,6 +328,7 @@ protected:
 	{
 		sock.context.loggedin=false;
 		sock.context.registered=false;
+		sock.context.verified=false;
  		sock.context.UID=++lastUID;
 		for(int i=0;i<20;++i)
 			sock.context.crypto[i]=(unsigned char)rand();
@@ -404,7 +411,8 @@ protected:
 		/*!TODO legközelebbi 50 kiválasztása */
 		for(unsigned i=0;i<n;++i)
 		if( sock.context.realm   ==socketek[i]->context.realm &&
-			sock.context.checksum==socketek[i]->context.checksum)
+			sock.context.checksum==socketek[i]->context.checksum &&
+			sock.context.verified==socketek[i]->context.verified )
 		{
 			TStickContext& scontext=socketek[i]->context;
 			frame.WriteChar((unsigned char)(scontext.ip));
@@ -600,6 +608,9 @@ protected:
 			if(record.level)
 				chatuzi=chatuzi+lang(nyelv,10)+itoa(record.level)+lang(nyelv,11);
 			SendChat(sock,chatuzi);
+
+			if (sock.context.checksum!=config.datachecksum)
+				SendChat(sock,lang(nyelv,50));
 			SendWeather(sock,weathermost);
 
 		}
@@ -632,10 +643,10 @@ protected:
 
 	void OnMsgStatus(TMySocket& sock,TSocketFrame& msg)
 	{
+		sock.context.verified=IsCryptoValid(sock,msg);
 
-		if (!IsCryptoValid(sock,msg))
-		SendKick(sock,lang(sock.context.nyelv,25),true);
 
+		sock.context.verified=true;
 		sock.context.x=msg.ReadInt();
 		sock.context.y=msg.ReadInt();
 
@@ -1036,8 +1047,8 @@ protected:
 	{
 		int UID=msg.ReadInt();
 
-		if (!IsCryptoValid(sock,msg))
-			SendKick(sock,lang(sock.context.nyelv,25),true);
+		sock.context.verified=IsCryptoValid(sock,msg);
+
 		
 
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
@@ -1045,6 +1056,8 @@ protected:
 			SendKick(sock,lang(sock.context.nyelv,26),true);
 			return;
 		}
+
+		if (!sock.context.verified) return;
 
 		unsigned n=socketek.size();
 		for(unsigned i=0;i<n;++i)
@@ -1294,6 +1307,9 @@ protected:
 		
 		
 		cout<<"Finished. "<<db.size()<<" player records."<<endl;
+
+		config.reload();
+		cout << "cfg reloaded: version " << config.clientversion << "\n";
 	}
 
 	virtual void OnUpdate(TMySocket& sock)
