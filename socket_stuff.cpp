@@ -216,6 +216,8 @@ void TBufferedSocket::Update()
 		error=2;//ezt észre fogod venni.
 	if (sendbuffer.empty() && closeaftersend)
 		error=3;//ezt is. Ez után töröld és csá
+	if (closeaftersend)
+		error=4;// azaz nem sikerult elkuldeni az utso packetet. fossunk ra.
 }
 
 bool TBufferedSocket::RecvFrame(TSocketFrame& hova)
