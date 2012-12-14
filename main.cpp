@@ -148,6 +148,8 @@ struct TStickContext{
 	bool is1v1;
 	bool verified;
 
+
+
 	/* állapot */
 	int glyph;
 	unsigned long long int lastrecv; //utolsó fogadott csomag
@@ -425,8 +427,8 @@ protected:
 		
 			frame.WriteInt(scontext.UID);
 
-			frame.WriteString(scontext.clan+" "+scontext.nev);
-
+			frame.WriteString(scontext.nev);
+			frame.WriteString(scontext.clan);
 			frame.WriteInt(scontext.fegyver);
 			frame.WriteInt(scontext.fejrevalo);
 			frame.WriteInt(scontext.kills);
@@ -643,10 +645,10 @@ protected:
 
 	void OnMsgStatus(TMySocket& sock,TSocketFrame& msg)
 	{
+
+
 		sock.context.verified=IsCryptoValid(sock,msg);
 
-
-		sock.context.verified=true;
 		sock.context.x=msg.ReadInt();
 		sock.context.y=msg.ReadInt();
 
@@ -995,11 +997,20 @@ protected:
 		{
 			ChatCleanup(uzenet);
 			if (sock.context.admin)
-				uzenet="\x11\xe0"+sock.context.nev+"\x11\x03: "+uzenet;
+			{
+				if (sock.context.fegyver>127)	uzenet="\x11\xe0"+sock.context.nev+"\x11\x4F:\x11\x03 "+uzenet;
+				else							uzenet="\x11\xe0"+sock.context.nev+"\x11\xE1:\x11\x03 "+uzenet;
+			}
 			else
-				uzenet="\x11\x01"+sock.context.nev+"\x11\x03: "+uzenet;
+			{
+				if (sock.context.fegyver>127)	uzenet="\x11\x01"+sock.context.nev+"\x11\x4F:\x11\x03 "+uzenet;
+				else							uzenet="\x11\x01"+sock.context.nev+"\x11\xE1:\x11\x03 "+uzenet;
+				
+			}
 			if (sock.context.clan.length()>0)
+			{
 				uzenet="\x11\x10"+sock.context.clan+" "+uzenet;
+			}
 
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
@@ -1021,12 +1032,12 @@ protected:
 			newcrypto[i]=sock.context.crypto[i]^config.sharedkey[i];
 
 		SHA1_Hash(newcrypto,20,sock.context.crypto);
-		
+		bool retval=true;
 		for(int i=0;i<20;++i)
 		if (sock.context.crypto[i]!=msg.ReadChar())
-			return false;
+			retval=false;
 
-		return true;
+		return retval;
 	}
 
 	void AddMedal(TMySocket& sock, int medalid)
