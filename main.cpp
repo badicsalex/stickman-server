@@ -1111,15 +1111,15 @@ protected:
 						nyertes = getSocketByName(chall->ellenfelNev);		winpoint = chall->kihivoPont;
 						vesztes = getSocketByName(chall->kihivoNev);	losepoint = chall->ellenfelPont;
 						}
-						if (nyertes) SendChat(*nyertes,lang(nyertes->context.nyelv,43)+nyertes->context.nev+" ("+itoa(winpoint)+":"+itoa(losepoint)+")");
-						if (vesztes) SendChat(*vesztes,lang(nyertes->context.nyelv,43)+nyertes->context.nev+" ("+itoa(winpoint)+":"+itoa(losepoint)+")");
+						if (nyertes && vesztes) SendChat(*nyertes,lang(nyertes->context.nyelv,43)+nyertes->context.nev+" ("+itoa(winpoint)+":"+itoa(losepoint)+")");
+						if (nyertes && vesztes) SendChat(*vesztes,lang(nyertes->context.nyelv,43)+nyertes->context.nev+" ("+itoa(winpoint)+":"+itoa(losepoint)+")");
 						if (nyertes) nyertes->context.realm = "";
 						if (vesztes) vesztes->context.realm = "";
 						if (nyertes)cout << "nyertes:"<< nyertes->context.nev << endl;
 						if (vesztes)cout << "vesztes:"<< vesztes->context.nev << endl;
 						chall->allapot=VEGE; 
 						if (nyertes) nyertes->context.is1v1 = false;
-						if (vesztes) nyertes->context.is1v1 = false;
+						if (vesztes) vesztes->context.is1v1 = false;
 						if (nyertes) SendChallenge(*nyertes,"",2);
 						if (vesztes) SendChallenge(*vesztes,"",2);
 						cout << "1v1 vége ";
@@ -1165,7 +1165,7 @@ protected:
 		int medalid=msg.ReadInt();
 
 		if (!IsCryptoValid(sock,msg))
-			SendKick(sock,lang(sock.context.nyelv,25),true);
+			return;
 		
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
 		{
