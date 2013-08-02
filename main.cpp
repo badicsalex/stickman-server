@@ -19,7 +19,7 @@
 #include <signal.h>
 
 #include <sys/time.h>
-
+#include <unistd.h>
 unsigned long long GetTickCount64()
 {
 	timespec tim;
@@ -374,8 +374,8 @@ protected:
 	unsigned long long lastweather;
 	int weathermost;
 	int weathercel;
-	bool disablekill;
 	unsigned long long laststatusfile;
+	bool disablekill;
 
 
 	TMySocket* getSocketByName(const string nev)
@@ -590,7 +590,7 @@ protected:
 		sock.SendFrame(frame);
 	}
 
-	void SendChatToAll(const string& uzenet,int showglyph=0,boolean redtext=false)
+	void SendChatToAll(const string& uzenet,int showglyph=0,bool redtext=false)
 	{
 		int n=socketek.size();
 		if (redtext)
