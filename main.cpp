@@ -8,6 +8,7 @@
 #include <fstream>
 #include <stdlib.h>
 #include <time.h>
+#include <ctime>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -19,7 +20,7 @@
 
 #include <sys/time.h>
 
-unsigned long long GetTickCount64()
+unsigned long GetTickCount64()
 {
 	timespec tim;
 	clock_gettime(CLOCK_MONOTONIC,&tim);
@@ -34,6 +35,7 @@ typedef unsigned short WORD;
 
 
 #endif
+
 
 
 using namespace std;
@@ -64,16 +66,19 @@ using namespace std;
 		ifstream fil(cfgsource.c_str());
 		fil>>clientversion;
 		fil>>hex>>datachecksum;
+
+
 		for(int i=0;i<20;++i)
 		{
 			int tmp;
 			fil>>hex>>tmp;
 			sharedkey[i]=(unsigned char)tmp;
 		}
+
 		fil>>webinterface;
 		fil>>webinterfacedown;
 		fil>>webinterfaceup;
-		
+	
 		string tmpstr;
 
 		fil>>tmpstr; 
@@ -102,6 +107,53 @@ using namespace std;
 		return result;
 	}
 } config("config.cfg");
+
+
+
+struct autoMessages{
+
+	vector<std::string> msglist;
+	string file;
+
+	autoMessages(string f)
+	{
+		file = f;
+		load();
+	}
+
+	void load()
+	{
+		try	
+		{
+			ifstream fil(file.c_str());
+			msglist.clear();
+			char tmp[1024];
+			while (!fil.eof())
+				{				
+				fil.getline(tmp,1023);
+				msglist.push_back(tmp);
+				}
+			fil.close();
+			cout << "loaded "<<msglist.size()<<" messages\n";
+		}
+		catch (exception e)
+		{
+			cout<<"error reading "<<file<<": "<<e.what()<<"\n";
+		}
+			
+		
+	}
+
+	string randomMessage()
+	{
+		if (msglist.size()==0) return "";
+		int k = rand()%msglist.size();
+		return msglist[k];
+	}
+
+
+} autoMsg("msglist.txt");
+
 
 struct TKill{
 	TKill(){
@@ -147,23 +199,26 @@ struct TStickContext{
 	bool kihivo;
 	bool is1v1;
 	bool verified;
+	bool realmAdmin;
 
 
 
 	/* állapot */
 	int glyph;
-	unsigned long long int lastrecv; //utolsó fogadott csomag
-	unsigned long long int lastsend; //utolsó küldött playerlista
-	unsigned long long int lastudpquery; //utolsó kérés hogy kliens küldjön UDP-t
+	unsigned long  int lastrecv; //utolsó fogadott csomag
+	unsigned long  int lastsend; //utolsó küldött playerlista
+	unsigned long  int lastudpquery; //utolsó kérés hogy kliens küldjön UDP-t
 	bool gotudp; //kaptunk UDP csomagot a port javításhoz.
 	int udpauth;
 	bool loggedin;
 	int x,y;
 	unsigned char crypto[20];
-	unsigned long long int floodtime;
+	unsigned long int floodtime;
 	string realm;
 	int lastwhisp;
 };
+
+
 
 
 struct TStickRecord{
@@ -291,6 +346,10 @@ int fegyvtoint(int i)
   int limit
 */
 
+#define SERVERMSG_MEDAL 9
+/*
+  string medalid
+*/
 
 class StickmanServer: public TBufferedServer<TStickContext>{
 protected:
@@ -306,17 +365,17 @@ protected:
 
 	vector<T1v1Game> challenges;
 
-	unsigned long long int lastUID;
-	unsigned long long int lastUDB;
-	unsigned long long int nextevent;
+	unsigned long int lastUID;
+	unsigned long int lastUDB;
+	unsigned long int nextevent;
 
 	time_t lastUDBsuccess;
 	
-	unsigned long long int lastweather;
+	unsigned long int lastweather;
 	int weathermost;
 	int weathercel;
 	bool disablekill;
-	unsigned long long int laststatusfile;
+	unsigned long int laststatusfile;
 
 
 	TMySocket* getSocketByName(const string nev)
@@ -334,7 +393,7 @@ protected:
  		sock.context.UID=++lastUID;
 		for(int i=0;i<20;++i)
 			sock.context.crypto[i]=(unsigned char)rand();
-		sock.context.lastrecv=GetTickCount64();
+		sock.context.lastrecv=GetTickCount();
 		sock.context.lastsend=0;
 		sock.context.lastudpquery=0; //utolsó kérés hogy kliens küldjön UDP-t
 		sock.context.gotudp=false; //ennyit várunk a következõ kérésig
@@ -348,6 +407,8 @@ protected:
 	virtual void OnBeforeDelete(TMySocket& sock)
 	{
 		cout << sock.context.nev << " lecsatlakozott \n";
+		AddToChatlog(sock.context.nev + " lecsatlakozott \n");
+
 		TMySocket *so;
 		for (unsigned i=0;i<challenges.size();i++)
 		{
@@ -358,6 +419,7 @@ protected:
 				{
 					so->context.realm="";
 					so->context.is1v1=false;
+					so->context.realmAdmin = false;
 					SendChat(*so,lang(so->context.nyelv,45));
 					SendChallenge(*so,"",2);
 				}
@@ -397,7 +459,17 @@ protected:
 		frame.WriteString(indok);
 		sock.SendFrame(frame,true);
 		cout<<"Kicked "<<sock.context.nev<<": "<<indok<<endl;
+		AddToChatlog("Kicked "+sock.context.nev+": "+indok);
 	}
+
+	void SendMedal(TMySocket& sock,int medalid)
+	{
+		TSocketFrame frame;
+		frame.WriteChar(SERVERMSG_MEDAL);
+		frame.WriteInt(medalid);
+		sock.SendFrame(frame);
+	}
+
 
 	void SendPlayerList(TMySocket& sock)
 	{
@@ -445,25 +517,88 @@ protected:
 			frame.WriteChar(sock.context.crypto[i]);
 		if (sock.context.registered)
 			frame.WriteInt(db[config.ToLowercase(sock.context.nev)].kills);
+
 		else
 		frame.WriteInt(0);
 		sock.SendFrame(frame);
+
+		
+	}
+
+	void AddToChatlog(TMySocket& sock,const string& uzenet)
+	{
+		time_t t = time(0);   // get time now
+		struct tm * now = localtime( & t );
+		chatlog.append(itoa(now->tm_year + 1900)); // év
+		chatlog.append(". ");
+		chatlog.append(itoa(now->tm_mon + 1)); //hónap
+		chatlog.append(". ");
+		chatlog.append(itoa(now->tm_mday)); //nap
+		chatlog.append(" ");
+		chatlog.append(itoa(now->tm_hour)); //óra
+		chatlog.append(":");
+		chatlog.append(itoa(now->tm_min)); //perc
+		chatlog.append(" - ");
+		chatlog.append(sock.context.nev);
+		chatlog.append(": ");
+		chatlog.append(uzenet);
+		chatlog.append("\r\n");
+	}
+
+		void AddToChatlog(const string& uzenet)
+	{
+		time_t t = time(0);   // get time now
+		struct tm * now = localtime( & t );
+		chatlog.append(itoa(now->tm_year + 1900)); // év
+		chatlog.append(". ");
+		chatlog.append(itoa(now->tm_mon + 1)); //hónap
+		chatlog.append(". ");
+		chatlog.append(itoa(now->tm_mday)); //nap
+		chatlog.append(" ");
+		chatlog.append(itoa(now->tm_hour)); //óra
+		chatlog.append(":");
+		chatlog.append(itoa(now->tm_min)); //perc
+		chatlog.append(" - ");
+		chatlog.append(uzenet);
+		chatlog.append("\r\n");
+	}
+
+	void SaveChatlog()
+	{
+		ofstream fil("chat.log",std::ofstream::app);
+		fil<<chatlog;
+		fil.close();
 	}
 
 	void SendChat(TMySocket& sock,const string& uzenet,int showglyph=0)
 	{
 		TSocketFrame frame;
 		frame.WriteChar(SERVERMSG_CHAT);
+		frame.WriteChar(0); // this is a normal chat msg
 		frame.WriteString(uzenet);
 		frame.WriteInt(showglyph);
 		sock.SendFrame(frame);
 	}
 
-	void SendChatToAll(const string& uzenet,int showglyph=0)
+	void SendBigText(TMySocket& sock,const string& uzenet)
+	{
+		TSocketFrame frame;
+		frame.WriteChar(SERVERMSG_CHAT);
+		frame.WriteChar(1); // this is a REDTEXT
+		frame.WriteString(uzenet);
+		frame.WriteInt(0);
+		sock.SendFrame(frame);
+	}
+
+	void SendChatToAll(const string& uzenet,int showglyph=0,boolean redtext=false)
 	{
 		int n=socketek.size();
-		for(int i=0;i<n;++i)
-			SendChat(*socketek[i],uzenet,showglyph);
+		if (redtext)
+			for(int i=0;i<n;++i)
+				SendBigText(*socketek[i],uzenet);
+		else
+			for(int i=0;i<n;++i)
+				SendChat(*socketek[i],uzenet,showglyph);
 	}
 
 	void SendWeather(TMySocket& sock,int mire)
@@ -508,9 +643,14 @@ protected:
 		int nyelv=sock.context.nyelv=msg.ReadInt();
 		
 		sock.context.is1v1 = false;
+		sock.context.realmAdmin = false;
 		
-		if (!lang.HasLang(nyelv))
+		
+
+		if (nyelv!=14)
 			nyelv=0;
+
+		sock.context.nyelv = nyelv;
 
 		if (verzio<config.clientversion )
 		{
@@ -566,10 +706,10 @@ protected:
 		}
 		int ip=sock.context.ip;
 		cout<<"Login "<<sock.context.nev<<" from "<<((ip)&0xff)<<"."<<((ip>>8)&0xff)<<"."<<((ip>>16)&0xff)<<"."<<((ip>>24)&0xff)<<endl;
-
-		if(bans.count(nev))
+		AddToChatlog("Login "+sock.context.nev+" from "+itoa((ip)&0xff)+"."+itoa((ip>>8)&0xff)+"."+itoa((ip>>16)&0xff)+"."+itoa((ip>>24)&0xff));
+		if(bans.count(config.ToLowercase(nev)))
 		{
-				SendKick(sock,lang(nyelv,34)+bans[nev],false);
+				SendKick(sock,lang(nyelv,34)+bans[config.ToLowercase(nev)],false);
 				return;
 		}
 
@@ -603,17 +743,42 @@ protected:
 
 			const string nev_lower=config.ToLowercase(sock.context.nev);
 			if (killdb.count(nev_lower))
+			{
 				if (sock.context.fegyver==record.fegyv)
 					record.kills=killdb[nev_lower][fegyvtoint(sock.context.fegyver)];
+
+				record.fegyv = fegyvtoint(sock.context.fegyver);
+			}
 			SendLoginOk(sock);
 			string chatuzi="\x11\x01"+lang(nyelv,8)+"\x11\x03"+nev+"\x11\x01"+lang(nyelv,9);
 			if(record.level)
 				chatuzi=chatuzi+lang(nyelv,10)+itoa(record.level)+lang(nyelv,11);
 			SendChat(sock,chatuzi);
+			
 
 			if (sock.context.checksum!=config.datachecksum)
 				SendChat(sock,lang(nyelv,50));
 			SendWeather(sock,weathermost);
+
+			//check for 5 members of the same clan
+
+			if (!sock.context.clan.empty())
+			{
+				int count = 0;
+				n = socketek.size();
+				for (unsigned a=0;a<n;a++)
+					if (socketek[a]->context.clan==sock.context.clan) count++;
+
+				if (count>=5)
+				{
+					for (unsigned a=0;a<n;a++)
+						if (socketek[a]->context.clan==sock.context.clan) AddMedal(*socketek[a],'T'|('M'<<8));
+
+				}
+			}
+
+
+
 
 		}
 		else
@@ -657,13 +822,14 @@ protected:
 			SendKick(sock,lang(sock.context.nyelv,15),true);
 			return;
 		}
-		sock.context.lastrecv=GetTickCount64();
+		sock.context.lastrecv=GetTickCount();
 	}
 
 	void ChatCommand(TMySocket& sock,const string& command,const string& parameter)
 	{
 		/* user commandok */
-		cout << sock.context.nev << " - " << command << " "<< parameter << endl;
+		//cout << sock.context.nev << " - " << command << " "<< parameter << endl;
+		AddToChatlog(sock,"/" + command + " " + parameter);
 
 		if (command=="realm" && parameter.size()>0 && sock.context.is1v1==false)
 		{
@@ -826,11 +992,71 @@ protected:
 
 				}
 		}
+		else
+		if (command=="admin") // adminság realmon
+		{
+			if (sock.context.realm=="") 
+				{
+					SendChat(sock,lang(sock.context.nyelv,51));
+					return;
+				}
+
+			int n = socketek.size(); // van e másik admin
+			for (int a=0;a<n;a++)
+				if (socketek[a]->context.realmAdmin && socketek[a]->context.realm==sock.context.realm)
+				{
+					SendChat(sock,lang(sock.context.nyelv,52)+socketek[a]->context.nev);
+					return;
+				}
+
+			sock.context.realmAdmin = true;
+			SendChat(sock,lang(sock.context.nyelv,53));			
+		}
+		else
+		if (command=="zero")
+			{
+				int n = socketek.size();
+
+				if (sock.context.admin) //adminos zero
+				{			
+
+				for(int a=0;a<n;a++)
+					if (socketek[a]->context.realm=="")
+						socketek[a]->context.kills = 0;
+				}
+				else
+					if (sock.context.realm!="" && sock.context.realmAdmin)
+					{
+						for(int a=0;a<n;a++)
+							if (socketek[a]->context.realm==sock.context.realm)
+								socketek[a]->context.kills = 0;
+					}
+
+			}
+		else
+		if (command=="realmkick")
+			{
+				if (sock.context.realm!="" && sock.context.realmAdmin)
+				{
+					unsigned n=socketek.size();
+					for(unsigned i=0;i<n;++i)
+						if (config.ToLowercase(socketek[i]->context.nev)==config.ToLowercase(parameter) && sock.context.realm==socketek[i]->context.realm)
+						{
+							socketek[i]->context.realm = "";
+							SendChat(*socketek[i],lang(socketek[i]->context.nyelv,54));
+						}
+				}
+			}
 
 		/* admin commandok */
 			
 		if (!sock.context.admin) return;
 
+		if (command=="ann" || command=="announce")
+		{
+			SendChatToAll(parameter,0,1);
+		}
+		else	
 		if (command=="weather")
 		{
 			weathermost=weathercel=atoi(parameter.c_str());
@@ -845,12 +1071,12 @@ protected:
 			int kickuid=atoi(parameter.c_str());
 			if (!kickuid)
 				for(unsigned i=0;i<n;++i)
-					if (socketek[i]->context.nev==parameter)
+					if (config.ToLowercase(socketek[i]->context.nev)==config.ToLowercase(parameter))
 						kickuid=socketek[i]->context.UID;
 
 			int pos=parameter.find(' ');
 			string uzenet;
-			if(pos>=0)
+			if(pos>0)
 				uzenet.assign(parameter.begin()+pos,parameter.end());
 			else
 				uzenet=lang(sock.context.nyelv,19); //lol lang specifikus default kick
@@ -862,7 +1088,7 @@ protected:
 					SendChatToAll("\x11\xe0"+sock.context.nev+lang(sock.context.nyelv,kick?21:36)+"\x11\x03"+
 								  socketek[i]->context.nev+"\x11\xe0"+lang(sock.context.nyelv,22)+uzenet);
 					if (!kick) 
-						bans[itoa(socketek[i]->address)]=uzenet;
+						bans[config.ToLowercase(socketek[i]->context.nev)]=uzenet;
 					break;
 				}
 		}else
@@ -916,6 +1142,7 @@ protected:
 				StartEvent("enablekill");
 				disablekill=false;
 			}
+
 
 	}
 
@@ -971,11 +1198,11 @@ protected:
 			return;
 
 		//flood ellenorzes
-		if (sock.context.floodtime<GetTickCount64()-12000)
-			sock.context.floodtime=GetTickCount64()-10000;
+		if (sock.context.floodtime<GetTickCount()-12000)
+			sock.context.floodtime=GetTickCount()-10000;
 		else
 			sock.context.floodtime+=2000;
-		if (sock.context.floodtime>GetTickCount64())
+		if (sock.context.floodtime>GetTickCount())
 		{
 			SendKick(sock,lang(sock.context.nyelv,24),true);
 			return;
@@ -1017,6 +1244,8 @@ protected:
 				if( sock.context.realm   ==socketek[i]->context.realm &&
 					sock.context.checksum==socketek[i]->context.checksum)
 					SendChat(*socketek[i],uzenet,sock.context.glyph);
+
+			AddToChatlog(sock,uzenet);
 		}
 	}
 	
@@ -1051,7 +1280,9 @@ protected:
 			dbrecord.medal.insert(medalid);
 
 			SendChat(sock,"\x11\x6c"+lang(sock.context.nyelv,47)+"\x11\x03"+medalnevek[medalid]+" \x11\x01"+lang(sock.context.nyelv,48));
+			SendMedal(sock,medalid);
 		}
+
 	}
 
 	void OnMsgKill(TMySocket& sock,TSocketFrame& msg)
@@ -1124,6 +1355,7 @@ protected:
 						if (vesztes) SendChallenge(*vesztes,"",2);
 						cout << "1v1 vége ";
 						if (nyertes) cout << nyertes->context.nev <<" nyert " <<" (" << itoa(winpoint) << ":" << itoa(losepoint) << ")";
+						if (nyertes && vesztes) AddToChatlog("1v1: "+ nyertes->context.nev + " vs " + vesztes->context.nev + " (" + itoa(winpoint) + ":" + itoa(losepoint) + ")");
 						cout << "\n";
 					}
 				}
@@ -1174,7 +1406,10 @@ protected:
 		}
 		
 		if (sock.context.realm=="")
+		{
 			AddMedal(sock,medalid);
+			
+		}
 	}
 
 	void StartEvent(const string &nev)
@@ -1191,10 +1426,11 @@ protected:
 	void UpdateDb()
 	{
 		cout<<"Updating database..."<<endl;
+		AddToChatlog("Database update");
 		//post kills
 		if(killdb.size()>0)
 		{
-			cout<<"Uploading kills "<<killdb.size()<<" kills."<<endl;
+			cout<<"Uploading kills: "<<killdb.size()<<" users."<<endl;
 			TBufferedSocket sock("stickman.hu",80);
 
 			string postmsg;
@@ -1319,8 +1555,6 @@ protected:
 		
 		cout<<"Finished. "<<db.size()<<" player records."<<endl;
 
-		config.reload();
-		cout << "cfg reloaded: version " << config.clientversion << "\n";
 	}
 
 	virtual void OnUpdate(TMySocket& sock)
@@ -1344,7 +1578,7 @@ protected:
 			}
 		}
 
-		unsigned long long int gtc=GetTickCount64();
+		unsigned long int gtc=GetTickCount();
 		/* 2000-2500 msenként küldünk playerlistát */
 		if (sock.context.loggedin &&
 			sock.context.lastsend<gtc-2000-(rand()&511))
@@ -1368,6 +1602,8 @@ protected:
 
 public:
 
+	std::string chatlog;
+
 	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
 		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15),
 		laststatusfile(0),disablekill(0)
@@ -1384,7 +1620,9 @@ public:
 			int medalid=buffer1[0] | (buffer1[1]<<8);
 			medalnevek[medalid]=string(buffer2);
 		}
-		nextevent=GetTickCount64()+24*3600*1000;
+		nextevent=GetTickCount()+24*3600*1000;
+
+		chatlog = "";
 	}
 
 	void Update()
@@ -1413,10 +1651,18 @@ public:
 
 
 
-		if (lastUDB<GetTickCount64()-300000)//5 percenként.
+		if (lastUDB<GetTickCount()-300000)//5 percenként.
 		{
+
 			UpdateDb();
-			lastUDB=GetTickCount64();
+
+			SaveChatlog();
+			autoMsg.load();
+
+			config.reload();
+			cout << "cfg reloaded: version " << config.clientversion << "\n";
+
+			lastUDB=GetTickCount();
 
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
@@ -1426,8 +1672,11 @@ public:
 
 		TBufferedServer<TStickContext>::Update();
 
-		if (lastweather<GetTickCount64()-60000)//percenként
+		if (lastweather<GetTickCount()-120000)// 2 percenként üzi
 		{
+
+			SendChatToAll("\x11\x01"+autoMsg.randomMessage(),false);
+
 			if (weathermost==weathercel)
 				weathercel=rand()%23;
 			if(weathermost>weathercel)
@@ -1439,18 +1688,18 @@ public:
 			for(int i=0;i<n;++i)
 				if (socketek[i]->context.loggedin)
 					SendWeather(*socketek[i],weathermost);
-			lastweather=GetTickCount64();
+			lastweather=GetTickCount();
 		}
-		if (laststatusfile<GetTickCount64()-60000)//percenként
+		if (laststatusfile<GetTickCount()-60000)//percenként
 		{
 			ofstream fil("status");
 			fil<<socketek.size();
-			laststatusfile=GetTickCount64();
+			laststatusfile=GetTickCount();
 		}
-		if (nextevent<GetTickCount64())
+		if (nextevent<GetTickCount())
 		{
 			StartEvent("spaceship");
-			nextevent=GetTickCount64()+12*3600*1000+rand()%(24*3600*1000);
+			nextevent=GetTickCount()+12*3600*1000+rand()%(24*3600*1000);
 		}
 	}
 };
