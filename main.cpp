@@ -20,7 +20,7 @@
 
 #include <sys/time.h>
 
-unsigned long GetTickCount64()
+unsigned long long GetTickCount64()
 {
 	timespec tim;
 	clock_gettime(CLOCK_MONOTONIC,&tim);
@@ -205,15 +205,15 @@ struct TStickContext{
 
 	/* állapot */
 	int glyph;
-	unsigned long  int lastrecv; //utolsó fogadott csomag
-	unsigned long  int lastsend; //utolsó küldött playerlista
-	unsigned long  int lastudpquery; //utolsó kérés hogy kliens küldjön UDP-t
+	unsigned long long lastrecv; //utolsó fogadott csomag
+	unsigned long long lastsend; //utolsó küldött playerlista
+	unsigned long long lastudpquery; //utolsó kérés hogy kliens küldjön UDP-t
 	bool gotudp; //kaptunk UDP csomagot a port javításhoz.
 	int udpauth;
 	bool loggedin;
 	int x,y;
 	unsigned char crypto[20];
-	unsigned long int floodtime;
+	unsigned long long floodtime;
 	string realm;
 	int lastwhisp;
 };
@@ -365,17 +365,17 @@ protected:
 
 	vector<T1v1Game> challenges;
 
-	unsigned long int lastUID;
-	unsigned long int lastUDB;
-	unsigned long int nextevent;
+	unsigned long long lastUID;
+	unsigned long long lastUDB;
+	unsigned long long nextevent;
 
 	time_t lastUDBsuccess;
 	
-	unsigned long int lastweather;
+	unsigned long long lastweather;
 	int weathermost;
 	int weathercel;
 	bool disablekill;
-	unsigned long int laststatusfile;
+	unsigned long long laststatusfile;
 
 
 	TMySocket* getSocketByName(const string nev)
@@ -393,7 +393,7 @@ protected:
  		sock.context.UID=++lastUID;
 		for(int i=0;i<20;++i)
 			sock.context.crypto[i]=(unsigned char)rand();
-		sock.context.lastrecv=GetTickCount();
+		sock.context.lastrecv=GetTickCount64();
 		sock.context.lastsend=0;
 		sock.context.lastudpquery=0; //utolsó kérés hogy kliens küldjön UDP-t
 		sock.context.gotudp=false; //ennyit várunk a következõ kérésig
@@ -822,7 +822,7 @@ protected:
 			SendKick(sock,lang(sock.context.nyelv,15),true);
 			return;
 		}
-		sock.context.lastrecv=GetTickCount();
+		sock.context.lastrecv=GetTickCount64();
 	}
 
 	void ChatCommand(TMySocket& sock,const string& command,const string& parameter)
@@ -1198,11 +1198,11 @@ protected:
 			return;
 
 		//flood ellenorzes
-		if (sock.context.floodtime<GetTickCount()-12000)
-			sock.context.floodtime=GetTickCount()-10000;
+		if (sock.context.floodtime<GetTickCount64()-12000)
+			sock.context.floodtime=GetTickCount64()-10000;
 		else
 			sock.context.floodtime+=2000;
-		if (sock.context.floodtime>GetTickCount())
+		if (sock.context.floodtime>GetTickCount64())
 		{
 			SendKick(sock,lang(sock.context.nyelv,24),true);
 			return;
@@ -1578,7 +1578,7 @@ protected:
 			}
 		}
 
-		unsigned long int gtc=GetTickCount();
+		unsigned long long gtc=GetTickCount64();
 		/* 2000-2500 msenként küldünk playerlistát */
 		if (sock.context.loggedin &&
 			sock.context.lastsend<gtc-2000-(rand()&511))
@@ -1620,7 +1620,7 @@ public:
 			int medalid=buffer1[0] | (buffer1[1]<<8);
 			medalnevek[medalid]=string(buffer2);
 		}
-		nextevent=GetTickCount()+24*3600*1000;
+		nextevent=GetTickCount64()+24*3600*1000;
 
 		chatlog = "";
 	}
@@ -1651,7 +1651,7 @@ public:
 
 
 
-		if (lastUDB<GetTickCount()-300000)//5 percenként.
+		if (lastUDB<GetTickCount64()-300000)//5 percenként.
 		{
 
 			UpdateDb();
@@ -1662,7 +1662,7 @@ public:
 			config.reload();
 			cout << "cfg reloaded: version " << config.clientversion << "\n";
 
-			lastUDB=GetTickCount();
+			lastUDB=GetTickCount64();
 
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
@@ -1672,7 +1672,7 @@ public:
 
 		TBufferedServer<TStickContext>::Update();
 
-		if (lastweather<GetTickCount()-120000)// 2 percenként üzi
+		if (lastweather<GetTickCount64()-120000)// 2 percenként üzi
 		{
 
 			SendChatToAll("\x11\x01"+autoMsg.randomMessage(),false);
@@ -1688,18 +1688,18 @@ public:
 			for(int i=0;i<n;++i)
 				if (socketek[i]->context.loggedin)
 					SendWeather(*socketek[i],weathermost);
-			lastweather=GetTickCount();
+			lastweather=GetTickCount64();
 		}
-		if (laststatusfile<GetTickCount()-60000)//percenként
+		if (laststatusfile<GetTickCount64()-60000)//percenként
 		{
 			ofstream fil("status");
 			fil<<socketek.size();
-			laststatusfile=GetTickCount();
+			laststatusfile=GetTickCount64();
 		}
-		if (nextevent<GetTickCount())
+		if (nextevent<GetTickCount64())
 		{
 			StartEvent("spaceship");
-			nextevent=GetTickCount()+12*3600*1000+rand()%(24*3600*1000);
+			nextevent=GetTickCount64()+12*3600*1000+rand()%(24*3600*1000);
 		}
 	}
 };
