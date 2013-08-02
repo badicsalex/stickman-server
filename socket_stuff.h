@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <netdb.h>
+#include <unistd.h>
 typedef unsigned int ULONG;
 typedef int SOCKET;
 typedef sockaddr_in SOCKADDR_IN;
