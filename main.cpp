@@ -567,6 +567,7 @@ protected:
 	{
 		ofstream fil("chat.log",std::ofstream::app);
 		fil<<chatlog;
+		chatlog="";
 		fil.close();
 	}
 
