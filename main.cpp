@@ -10,6 +10,11 @@
 #include <time.h>
 #include <ctime>
 
+
+//FLAGEK
+#define BUTA
+#define WHITELIST
+
 #ifdef _WIN32
 #include <windows.h>
 
@@ -35,7 +40,6 @@ typedef unsigned short WORD;
 
 
 #endif
-
 
 
 using namespace std;
@@ -67,18 +71,25 @@ using namespace std;
 		fil>>clientversion;
 		fil>>hex>>datachecksum;
 
+#ifdef BUTA
+	#include "key.h"
 
+		setSharedKey(sharedkey);
+#else
+	
 		for(int i=0;i<20;++i)
 		{
 			int tmp;
 			fil>>hex>>tmp;
 			sharedkey[i]=(unsigned char)tmp;
 		}
-
+			
 		fil>>webinterface;
 		fil>>webinterfacedown;
 		fil>>webinterfaceup;
-	
+
+#endif
+
 		string tmpstr;
 
 		fil>>tmpstr; 
@@ -108,6 +119,67 @@ using namespace std;
 	}
 } config("config.cfg");
 
+
+
+#ifdef WHITELIST
+
+#include "key.h"
+
+struct TWhiteList{
+	string source;				//a config fájl helye
+	vector<string> players;
+	vector<string> passwords;
+
+	TWhiteList(const string& honnan)
+	{
+		source=honnan;
+		reload();
+	}
+
+		void reload()
+	{
+		ifstream fil(source.c_str());
+
+		if (!fil.good()) 
+			{
+			cout << "Cannot open " << source <<"!\n";
+			return;
+			}
+
+		char tmp1[256];
+		char tmp2[256];
+		while (!fil.eof())
+			{				
+			fil.getline(tmp1,255);
+			fil.getline(tmp2,255);
+			if (fil.good()) 
+				{
+					string tmpstr;
+					tmpstr = tmp1;
+					players.push_back(config.ToLowercase(tmpstr));
+					tmpstr = tmp2;
+
+
+					passwords.push_back(encodePassword(tmpstr));
+				}
+			}
+		cout << "loaded " << players.size() << " players from whitelist\n";
+	}
+
+	bool contains(string name,string* pass)
+	{
+		for (unsigned a = 0; a<players.size(); a++)
+			if (players[a] == name) 
+				{
+					*pass = passwords[a];
+					return true;
+				}
+		return false;
+	}
+
+} wlist("whitelist.txt");
+
+#endif
 
 
 struct autoMessages{
@@ -720,6 +792,17 @@ protected:
 				return;
 		}
 
+#ifdef WHITELIST
+		string pass;
+		if (wlist.contains(config.ToLowercase(nev),&pass))//whitelisten levõ player
+		{
+			if (pass!=jelszo)
+			{
+				SendKick(sock,lang(nyelv,7),false);
+				return;
+			}
+
+#else
 		if (db.count(config.ToLowercase(nev)))//regisztrált player
 		{
 			TStickRecord& record=db[config.ToLowercase(nev)];
@@ -728,7 +811,7 @@ protected:
 				SendKick(sock,lang(nyelv,7),false);
 				return;
 			}
-
+#endif
 			// anti multi
 			for (unsigned i = 0; i<socketek.size();i++)
 				if (config.ToLowercase(socketek[i]->context.nev)==config.ToLowercase(nev) && socketek[i]->context.UID!=sock.context.UID)
@@ -738,11 +821,15 @@ protected:
 			}
 
 
-
+			#ifndef WHITELIST
 			sock.context.clan=record.clan;
+			#endif
 			sock.context.registered=true;
 
 			const string nev_lower=config.ToLowercase(sock.context.nev);
+
+
+			#ifndef WHITELIST
 			if (killdb.count(nev_lower))
 			{
 				if (sock.context.fegyver==record.fegyv)
@@ -750,10 +837,13 @@ protected:
 
 				record.fegyv = fegyvtoint(sock.context.fegyver);
 			}
+			#endif
+
+
 			SendLoginOk(sock);
 			string chatuzi="\x11\x01"+lang(nyelv,8)+"\x11\x03"+nev+"\x11\x01"+lang(nyelv,9);
-			if(record.level)
-				chatuzi=chatuzi+lang(nyelv,10)+itoa(record.level)+lang(nyelv,11);
+			/*if(record.level)
+				chatuzi=chatuzi+lang(nyelv,10)+itoa(record.level)+lang(nyelv,11);*/  // olvasatlan levelek, inaktív
 			SendChat(sock,chatuzi);
 			
 
@@ -1654,9 +1744,9 @@ public:
 
 		if (lastUDB<GetTickCount64()-300000)//5 percenként.
 		{
-
+#ifndef BUTA
 			UpdateDb();
-
+#endif
 			SaveChatlog();
 			autoMsg.load();
 
