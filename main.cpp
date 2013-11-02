@@ -12,8 +12,8 @@
 
 
 //FLAGEK
-#define BUTA
-#define WHITELIST
+//#define BUTA
+//#define WHITELIST
 
 #ifdef _WIN32
 #include <windows.h>
