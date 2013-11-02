@@ -1099,6 +1099,9 @@ protected:
 					SendChat(sock,lang(sock.context.nyelv,52)+socketek[a]->context.nev);
 					return;
 				}
+				
+			// ha 1v1 ezik akk nem.
+			if (sock.context.is1v1) return;
 
 			sock.context.realmAdmin = true;
 			SendChat(sock,lang(sock.context.nyelv,53));			
