@@ -12,7 +12,6 @@
 
 
 //FLAGEK
-//#define BUTA
 //#define WHITELIST
 
 #ifdef _WIN32
@@ -71,11 +70,7 @@ using namespace std;
 		fil>>clientversion;
 		fil>>hex>>datachecksum;
 
-#ifdef BUTA
-	#include "key.h"
 
-		setSharedKey(sharedkey);
-#else
 	
 		for(int i=0;i<20;++i)
 		{
@@ -87,8 +82,6 @@ using namespace std;
 		fil>>webinterface;
 		fil>>webinterfacedown;
 		fil>>webinterfaceup;
-
-#endif
 
 		string tmpstr;
 
@@ -119,67 +112,6 @@ using namespace std;
 	}
 } config("config.cfg");
 
-
-
-#ifdef WHITELIST
-
-#include "key.h"
-
-struct TWhiteList{
-	string source;				//a config fájl helye
-	vector<string> players;
-	vector<string> passwords;
-
-	TWhiteList(const string& honnan)
-	{
-		source=honnan;
-		reload();
-	}
-
-		void reload()
-	{
-		ifstream fil(source.c_str());
-
-		if (!fil.good()) 
-			{
-			cout << "Cannot open " << source <<"!\n";
-			return;
-			}
-
-		char tmp1[256];
-		char tmp2[256];
-		while (!fil.eof())
-			{				
-			fil.getline(tmp1,255);
-			fil.getline(tmp2,255);
-			if (fil.good()) 
-				{
-					string tmpstr;
-					tmpstr = tmp1;
-					players.push_back(config.ToLowercase(tmpstr));
-					tmpstr = tmp2;
-
-
-					passwords.push_back(encodePassword(tmpstr));
-				}
-			}
-		cout << "loaded " << players.size() << " players from whitelist\n";
-	}
-
-	bool contains(string name,string* pass)
-	{
-		for (unsigned a = 0; a<players.size(); a++)
-			if (players[a] == name) 
-				{
-					*pass = passwords[a];
-					return true;
-				}
-		return false;
-	}
-
-} wlist("whitelist.txt");
-
-#endif
 
 
 struct autoMessages{
@@ -448,6 +380,9 @@ protected:
 	int weathercel;
 	unsigned long long laststatusfile;
 	bool disablekill;
+
+	struct tm timer;
+	bool timer_active;
 
 
 	TMySocket* getSocketByName(const string nev)
@@ -1064,6 +999,8 @@ protected:
 							socketek[a]->context.is1v1 = true;
 							socketek[a]->context.kills=0;
 							sock.context.kills=0;
+							sock.context.realmAdmin = false;
+							socketek[a]->context.realmAdmin = false;
 							break;
 						}						
 
@@ -1157,6 +1094,25 @@ protected:
 			unsigned n=socketek.size();
 			for(unsigned i=0;i<n;++i)
 				SendWeather(*socketek[i],weathermost);
+		}else	
+		if (command=="countdown")
+		{
+			string humantime=parameter.c_str();
+			int ora = atoi(humantime.substr(0,2).c_str());
+			int perc = atoi(humantime.substr(3,5).c_str());
+			
+
+			time_t now = time(NULL);
+			timer = *localtime(&now);	
+
+			timer.tm_hour = ora; timer.tm_min = perc; timer.tm_sec = 0;
+			
+
+			timer_active = TRUE;
+
+			double diffd = difftime(mktime(&timer),now);
+			SendChat(sock,"Countdown started: "+itoa((int) diffd)+"sec",0);
+
 		}else	
 		if (command=="kick" || command=="ban")
 		{
@@ -1700,7 +1656,7 @@ public:
 
 	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
 		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15),
-		laststatusfile(0),disablekill(0)
+		laststatusfile(0),disablekill(0),timer_active(0)
 	{
 		ifstream fil("medals.cfg");
 		while(1)
@@ -1747,9 +1703,9 @@ public:
 
 		if (lastUDB<GetTickCount64()-300000)//5 percenként.
 		{
-#ifndef BUTA
+
 			UpdateDb();
-#endif
+
 			SaveChatlog();
 			autoMsg.load();
 
@@ -1795,6 +1751,24 @@ public:
 			StartEvent("spaceship");
 			nextevent=GetTickCount64()+12*3600*1000+rand()%(24*3600*1000);
 		}
+		// timer kiírás
+		if (timer_active) 
+		{
+			time_t now = time(NULL);
+			double diffd = difftime(mktime(&timer),now);
+			int diff = diffd;
+
+			if ((diff % 60)==0 && diff!=0) SendChatToAll(itoa(diff/60)+" perc van hátra",0,true);
+			if (diff==15 || diff==30) SendChatToAll(itoa(diff)+" mp",0,true);
+			if (diff<5 && diff!=0) SendChatToAll(itoa(diff),0,true);
+			if (diff==0) 
+			{
+				SendChatToAll("START!",0,true);
+				timer_active = false;
+			}
+		}
+
+
 	}
 };
 
