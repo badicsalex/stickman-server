@@ -43,6 +43,36 @@ typedef unsigned short WORD;
 
 using namespace std;
 
+ struct Finished1v1{
+	 string player1,player2;
+	 int score1,score2;
+ };
+ /*
+ struct TAutomated1v1data{
+
+	 vector<Finished1v1> games;
+	// map<string,TStickRecord>* db;
+
+	 void addGame(string player1, string player2, int score1, int score2) {
+		 Finished1v1* i = new Finished1v1();
+		 i->player1 = player1;
+		 i->player2 = player2;
+		 i->score1 = score1;
+		 i->score2 = score2;
+
+		 games.push_back(*i);
+	 }
+
+	 bool isGamePlayed(string player1, string player2) {
+		 unsigned int a = 0;
+		 for (a=0;a<10;a++) return;
+
+	 }
+
+	 void setDB(map<string,TStickRecord>* database){
+		 db = database;
+	 }
+ };*/
 
  struct TConfig{
 	int clientversion;				//kliens verzió, ez alatt kickel
@@ -366,6 +396,7 @@ protected:
 	map<string,string> bans;
 
 	map<unsigned short,string> medalnevek;
+
 
 	vector<T1v1Game> challenges;
 
@@ -1652,12 +1683,14 @@ protected:
 
 public:
 
+	//TAutomated1v1data champ1v1;
 	std::string chatlog;
 
 	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
 		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15),
 		laststatusfile(0),disablekill(0),timer_active(0)
 	{
+		//champ1v1.setDB(&db);
 		ifstream fil("medals.cfg");
 		while(1)
 		{
