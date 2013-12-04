@@ -872,6 +872,27 @@ protected:
 			SendChat(sock,"Most nem játszhatsz 1v1-et, bajnokság folyik és te nem vagy regisztrálva",0);
 			return;
 		}
+			SendChat(sock,"Az automata 1v1 be van kapcsolva, tehát a gép sorsol majd egy játékost.",0);
+
+			sock.context.readyFor1v1Games = true;
+
+
+			if (sock.context.admin) {
+				int pnum = 0;
+				int n = socketek.size();
+				string names;
+
+				SendChat(sock,"Várakozó emberek:"+pnum,0);
+
+				for (int a=0; a<n;a++)
+					if (socketek[a]->context.readyFor1v1Games)
+						{
+							SendChat(sock,socketek[a]->context.nev,0);
+							pnum++;
+						}
+
+				SendChat(sock,"összesen"+itoa(pnum)+"játékos",0);
+			}
 
 		//okké akkor keressünk valakit.
 		int n = socketek.size();
@@ -1168,7 +1189,7 @@ protected:
 		if (command=="auto1v1")
 		{
 			feature1v1gamesActive = (parameter == "1");
-			SendChat(sock,"automatikus 1v1 sorsolás átállítva: "+feature1v1gamesActive?"bekapcsolva":"kikapcsolva");
+			SendChat(sock,feature1v1gamesActive?"automatikus 1v1 sorsolás átállítva: bekapcsolva":"automatikus 1v1 sorsolás átállítva: kikapcsolva");
 
 		}
 		else	
