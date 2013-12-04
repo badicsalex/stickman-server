@@ -47,32 +47,8 @@ using namespace std;
 	 string player1,player2;
 	 int score1,score2;
  };
- /*
- struct TAutomated1v1data{
+ 
 
-	 vector<Finished1v1> games;
-	// map<string,TStickRecord>* db;
-
-	 void addGame(string player1, string player2, int score1, int score2) {
-		 Finished1v1* i = new Finished1v1();
-		 i->player1 = player1;
-		 i->player2 = player2;
-		 i->score1 = score1;
-		 i->score2 = score2;
-
-		 games.push_back(*i);
-	 }
-
-	 bool isGamePlayed(string player1, string player2) {
-		 unsigned int a = 0;
-		 for (a=0;a<10;a++) return;
-
-	 }
-
-	 void setDB(map<string,TStickRecord>* database){
-		 db = database;
-	 }
- };*/
 
  struct TConfig{
 	int clientversion;				//kliens verzió, ez alatt kickel
@@ -235,6 +211,8 @@ struct TStickContext{
 	bool verified;
 	bool realmAdmin;
 
+	//1v1games
+	bool readyFor1v1Games;
 
 
 	/* állapot */
@@ -251,8 +229,6 @@ struct TStickContext{
 	string realm;
 	int lastwhisp;
 };
-
-
 
 
 struct TStickRecord{
@@ -425,6 +401,7 @@ protected:
 
 	virtual void OnConnect(TMySocket& sock)
 	{
+		
 		sock.context.loggedin=false;
 		sock.context.registered=false;
 		sock.context.verified=false;
@@ -440,6 +417,7 @@ protected:
 		sock.context.floodtime=0;
 		sock.context.udpauth=rand();
 		sock.context.nyelv=0;
+		sock.context.readyFor1v1Games = false;
 	}
 
 	virtual void OnBeforeDelete(TMySocket& sock)
@@ -868,7 +846,6 @@ protected:
 	void OnMsgStatus(TMySocket& sock,TSocketFrame& msg)
 	{
 
-
 		sock.context.verified=IsCryptoValid(sock,msg);
 
 		sock.context.x=msg.ReadInt();
@@ -881,6 +858,73 @@ protected:
 		}
 		sock.context.lastrecv=GetTickCount64();
 	}
+
+	bool isSameTeam(TMySocket& sock1,TMySocket& sock2)
+	{
+		return ((sock1.context.fegyver>=128 && sock2.context.fegyver>=128) ||
+				(sock1.context.fegyver<128 && sock2.context.fegyver<128));
+	}
+
+	void Enter1v1Games(TMySocket& sock)
+	{
+		if (!sock.context.registered)
+		{
+			SendChat(sock,"Most nem játszhatsz 1v1-et, bajnokság folyik és te nem vagy regisztrálva",0);
+			return;
+		}
+
+		//okké akkor keressünk valakit.
+		int n = socketek.size();
+		for (int a=0; a<n;a++)
+		{
+			TMySocket* ellen = socketek[a];
+
+			if (ellen->context.readyFor1v1Games && !isSameTeam(sock,*ellen))
+			{
+				//oké akkor még megnézzük, hogy játszottak e már.
+				int gn = played1v1games.size();
+				bool ok = true;
+				for (int b=0;b<gn;b++)
+				{
+					
+					if (played1v1games[b].player1==sock.context.nev && played1v1games[b].player2 == ellen->context.nev)
+					{
+						ok = false;
+						break;
+					}
+				}
+
+				if (ok) 
+				{
+					//mehet az 1v1
+					SendChallenge(*ellen,sock.context.nev,true);
+					SendChallenge(sock,ellen->context.nev,true);
+
+					sock.context.realm=ellen->context.nev+"_vs_"+sock.context.nev;
+					ellen->context.realm = ellen->context.nev+"_vs_"+sock.context.nev;
+
+					SendChat(sock,lang(sock.context.nyelv,42)+itoa(5)+lang(sock.context.nyelv,40));
+					SendChat(*ellen,lang(socketek[a]->context.nyelv,42)+itoa(5)+lang(socketek[a]->context.nyelv,40));
+
+					sock.	context.kihivo=false;
+					ellen->	context.kihivo=true;
+					sock.	context.is1v1 = true;
+					ellen->	context.is1v1 = true;
+					ellen->	context.kills=0;
+					sock.	context.kills=0;
+					sock.	context.realmAdmin = false;
+					ellen->	context.realmAdmin = false;
+					sock.	context.readyFor1v1Games = false;
+					ellen->	context.readyFor1v1Games = false;
+
+					break;
+				}
+			}
+		}
+
+	}
+
+
 
 	void ChatCommand(TMySocket& sock,const string& command,const string& parameter)
 	{
@@ -947,6 +991,8 @@ protected:
 		}else
 		if (command=="1v1")
 		{
+			if (feature1v1gamesActive) Enter1v1Games(sock);
+			else {
 				string kinek;
 				int limit = 0;
 				size_t pos=0;
@@ -1000,7 +1046,7 @@ protected:
 					}
 				}
 				if (!talalt) SendChat(sock, kinek+lang(sock.context.nyelv,41));
-				
+			}
 
 		}else
 		if (command=="accept")
@@ -1118,6 +1164,13 @@ protected:
 		{
 			SendChatToAll(parameter,0,1);
 		}
+		else
+		if (command=="auto1v1")
+		{
+			feature1v1gamesActive = (parameter == "1");
+			SendChat(sock,"automatikus 1v1 sorsolás átállítva: "+feature1v1gamesActive?"bekapcsolva":"kikapcsolva");
+
+		}
 		else	
 		if (command=="weather")
 		{
@@ -1139,7 +1192,7 @@ protected:
 			timer.tm_hour = ora; timer.tm_min = perc; timer.tm_sec = 0;
 			
 
-			timer_active = TRUE;
+			timer_active = true;
 
 			double diffd = difftime(mktime(&timer),now);
 			SendChat(sock,"Countdown started: "+itoa((int) diffd)+"sec",0);
@@ -1683,14 +1736,17 @@ protected:
 
 public:
 
-	//TAutomated1v1data champ1v1;
 	std::string chatlog;
+	bool feature1v1gamesActive;
+	std::vector<Finished1v1> played1v1games;
+
 
 	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
 		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15),
 		laststatusfile(0),disablekill(0),timer_active(0)
 	{
-		//champ1v1.setDB(&db);
+		feature1v1gamesActive = false;
+		
 		ifstream fil("medals.cfg");
 		while(1)
 		{
