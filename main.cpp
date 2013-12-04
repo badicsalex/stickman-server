@@ -938,6 +938,17 @@ protected:
 					sock.	context.readyFor1v1Games = false;
 					ellen->	context.readyFor1v1Games = false;
 
+
+					T1v1Game* chall = 0;
+					chall->allapot=FOLYAMATBAN;
+					chall->kihivoNev = sock.context.nev;
+					chall->ellenfelNev = ellen->context.nev;
+					chall->kihivoPont = chall->ellenfelPont = 0;
+					chall->limit = 5;
+					challenges.push_back(*chall);
+
+
+
 					break;
 				}
 			}
@@ -1454,7 +1465,7 @@ protected:
 			return;
 		}
 
-		if (!sock.context.verified) return;
+		
 
 		unsigned n=socketek.size();
 		for(unsigned i=0;i<n;++i)
@@ -1516,6 +1527,8 @@ protected:
 				}
 			}
 			socketek[i]->context.kills+=1;
+
+			if (!sock.context.verified)	return;
 
 			if(socketek[i]->context.registered)
 			{
