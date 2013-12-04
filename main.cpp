@@ -440,7 +440,19 @@ protected:
 					SendChallenge(*so,"",2);
 				}
 				if (challenges[i].kihivoPont>=challenges[i].ellenfelPont*1.5 && challenges[i].kihivoPont>=5)
+				{
 					challenges[i].allapot=VEGE;
+
+					if (feature1v1gamesActive)
+					{
+						Finished1v1 fin;
+						fin.player1 = challenges[i].kihivoNev;
+						fin.player2 = challenges[i].ellenfelNev;
+						fin.score1 = challenges[i].kihivoPont;
+						fin.score2 = challenges[i].ellenfelPont;
+						played1v1games.push_back(fin);
+					}
+				}
 				else
 				challenges.erase(challenges.begin()+i);
 			}
@@ -939,7 +951,7 @@ protected:
 					ellen->	context.readyFor1v1Games = false;
 
 
-					T1v1Game* chall = 0;
+					T1v1Game* chall = new T1v1Game();
 					chall->allapot=FOLYAMATBAN;
 					chall->kihivoNev = sock.context.nev;
 					chall->ellenfelNev = ellen->context.nev;
