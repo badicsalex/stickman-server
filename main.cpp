@@ -442,16 +442,6 @@ protected:
 				if (challenges[i].kihivoPont>=challenges[i].ellenfelPont*1.5 && challenges[i].kihivoPont>=5)
 				{
 					challenges[i].allapot=VEGE;
-
-					if (feature1v1gamesActive)
-					{
-						Finished1v1 fin;
-						fin.player1 = challenges[i].kihivoNev;
-						fin.player2 = challenges[i].ellenfelNev;
-						fin.score1 = challenges[i].kihivoPont;
-						fin.score2 = challenges[i].ellenfelPont;
-						played1v1games.push_back(fin);
-					}
 				}
 				else
 				challenges.erase(challenges.begin()+i);
@@ -918,9 +908,9 @@ protected:
 				int gn = played1v1games.size();
 				bool ok = true;
 				for (int b=0;b<gn;b++)
-				{
-					
-					if (played1v1games[b].player1==sock.context.nev && played1v1games[b].player2 == ellen->context.nev)
+				{			
+					if (played1v1games[b].player1==sock.context.nev && played1v1games[b].player2 == ellen->context.nev ||
+						played1v1games[b].player1==ellen->context.nev && played1v1games[b].player2 == sock.context.nev)
 					{
 						ok = false;
 						break;
@@ -1506,7 +1496,17 @@ protected:
 						chall->ellenfelPont++;
 
 					if (chall->kihivoPont==chall->limit || chall->ellenfelPont==chall->limit) 
-					{
+					{					
+						if (feature1v1gamesActive)
+						{
+							Finished1v1 fin;
+							fin.player1 = challenges[i].kihivoNev;
+							fin.player2 = challenges[i].ellenfelNev;
+							fin.score1 = challenges[i].kihivoPont;
+							fin.score2 = challenges[i].ellenfelPont;
+							played1v1games.push_back(fin);
+						}
+
 						//a két ember megkeresése
 						TMySocket *nyertes=0,*vesztes=0;
 						int winpoint, losepoint;
@@ -1540,6 +1540,8 @@ protected:
 			}
 			socketek[i]->context.kills+=1;
 
+			SendChat(*socketek[i],"\x11\x01"+lang(socketek[i]->context.nyelv,27)+"\x11\x03"+sock.context.nev+"\x11\x01"+lang(socketek[i]->context.nyelv,28));
+			SendChat(sock,"\x11\x01"+lang(sock.context.nyelv,29)+"\x11\x03"+socketek[i]->context.nev+" \x11\x01"+lang(sock.context.nyelv,30));
 			if (!sock.context.verified)	return;
 
 			if(socketek[i]->context.registered)
@@ -1564,8 +1566,6 @@ protected:
 				}
 			}
 
-			SendChat(*socketek[i],"\x11\x01"+lang(socketek[i]->context.nyelv,27)+"\x11\x03"+sock.context.nev+"\x11\x01"+lang(socketek[i]->context.nyelv,28));
-			SendChat(sock,"\x11\x01"+lang(sock.context.nyelv,29)+"\x11\x03"+socketek[i]->context.nev+" \x11\x01"+lang(sock.context.nyelv,30));
 			break;
 		}
 	}
