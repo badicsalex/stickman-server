@@ -909,8 +909,8 @@ protected:
 				bool ok = true;
 				for (int b=0;b<gn;b++)
 				{			
-					if (played1v1games[b].player1==sock.context.nev && played1v1games[b].player2 == ellen->context.nev ||
-						played1v1games[b].player1==ellen->context.nev && played1v1games[b].player2 == sock.context.nev)
+					if ((played1v1games[b].player1==sock.context.nev && played1v1games[b].player2 == ellen->context.nev) ||
+						(played1v1games[b].player1==ellen->context.nev && played1v1games[b].player2 == sock.context.nev))
 					{
 						ok = false;
 						break;
