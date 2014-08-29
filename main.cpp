@@ -669,6 +669,7 @@ protected:
 		
 		sock.context.is1v1 = false;
 		sock.context.realmAdmin = false;
+		sock.context.kbwar = false;
 		
 		
 
@@ -1209,18 +1210,20 @@ protected:
 				if (!sock.context.kbwar)
 				{
 				SendEvent(sock,"kbwar",1);	
-				SendChat(sock,"\x11\x01Beszálltál a KBWARba.");
+				SendChat(sock,"\x11\x01 Beszálltál a KBWARba.");
+				sock.context.kbwar = true;
 				}
 				else
 				{
 				SendEvent(sock,"kbwar",0);	
-				SendChat(sock,"\x11\x01Kiszálltál a KBWARból.");
+				SendChat(sock,"\x11\x01 Kiszálltál a KBWARból.");
+				sock.context.kbwar = false;
 				}
 			}
 			else
 			{
-				SendChat(sock,"\x11\x01Most nincs KBWAR.");
-				SendChat(sock,"\x11\x01Minden nap 14:00-14:30, 17:00-17:30 és 20:00-20:30 között van.");
+				SendChat(sock,"\x11\x01 Most nincs KBWAR.");
+				SendChat(sock,"\x11\x01 Minden nap 14:00-14:30, 17:00-17:30 és 20:00-20:30 között van.");
 			}
 		}
 
