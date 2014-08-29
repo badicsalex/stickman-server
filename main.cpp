@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <ctime>
+#include <ctype.h>
+#include <locale>
 
 
 //FLAGEK
@@ -210,6 +212,7 @@ struct TStickContext{
 	bool is1v1;
 	bool verified;
 	bool realmAdmin;
+	bool kbwar;
 
 	//1v1games
 	bool readyFor1v1Games;
@@ -380,16 +383,19 @@ protected:
 	unsigned long long lastUDB;
 	unsigned long long nextevent;
 
+
 	time_t lastUDBsuccess;
 	
 	unsigned long long lastweather;
 	int weathermost;
 	int weathercel;
 	unsigned long long laststatusfile;
+	unsigned long long lastsecond;
 	bool disablekill;
 
 	struct tm timer;
 	bool timer_active;
+	bool kbwar_active;
 
 
 	TMySocket* getSocketByName(const string nev)
@@ -959,6 +965,12 @@ protected:
 	}
 
 
+	bool is_number(const std::string& s)
+	{
+		std::string::const_iterator it = s.begin();
+		while (it != s.end() && isdigit(*it)) ++it;
+		return !s.empty() && it == s.end();
+	}
 
 	void ChatCommand(TMySocket& sock,const string& command,const string& parameter)
 	{
@@ -1189,6 +1201,28 @@ protected:
 						}
 				}
 			}
+		else
+		if (command=="kbwar")
+		{
+			if (kbwar_active)
+			{
+				if (!sock.context.kbwar)
+				{
+				SendEvent(sock,"kbwar",1);	
+				SendChat(sock,"\x11\x01Beszálltál a KBWARba.");
+				}
+				else
+				{
+				SendEvent(sock,"kbwar",0);	
+				SendChat(sock,"\x11\x01Kiszálltál a KBWARból.");
+				}
+			}
+			else
+			{
+				SendChat(sock,"\x11\x01Most nincs KBWAR.");
+				SendChat(sock,"\x11\x01Minden nap 14:00-14:30, 17:00-17:30 és 20:00-20:30 között van.");
+			}
+		}
 
 		/* admin commandok */
 			
@@ -1236,8 +1270,14 @@ protected:
 		{
 			unsigned n=socketek.size();
 			bool kick=command=="kick";
-			int kickuid=atoi(parameter.c_str());
-			if (!kickuid)
+
+			int kickuid = 0;
+			
+			if (is_number(parameter.c_str()))
+			{
+				kickuid=atoi(parameter.c_str());
+			}
+			else
 				for(unsigned i=0;i<n;++i)
 					if (config.ToLowercase(socketek[i]->context.nev)==config.ToLowercase(parameter))
 						kickuid=socketek[i]->context.UID;
@@ -1260,6 +1300,43 @@ protected:
 					break;
 				}
 		}else
+		if (command=="banip")
+		{
+			unsigned n=socketek.size();
+
+			int kickuid = 0;
+			
+			if (is_number(parameter.c_str()))
+			{
+				kickuid=atoi(parameter.c_str());
+			}
+			else
+			for(unsigned i=0;i<n;++i)
+				if (config.ToLowercase(socketek[i]->context.nev)==config.ToLowercase(parameter))
+					kickuid=socketek[i]->context.UID;
+
+			int pos=parameter.find(' ');
+			string uzenet;
+			if(pos>0)
+				uzenet.assign(parameter.begin()+pos,parameter.end());
+			else
+				uzenet=lang(sock.context.nyelv,19); //lol lang specifikus default kick
+
+
+			for(unsigned i=0;i<n;++i)
+				if (socketek[i]->context.UID==kickuid)
+				{
+					SendKick(*socketek[i],sock.context.nev+lang(sock.context.nyelv,35)+uzenet,true);
+					SendChatToAll("\x11\xe0"+sock.context.nev+lang(sock.context.nyelv,36)+"\x11\x03"+
+								  socketek[i]->context.nev+"\x11\xe0"+lang(sock.context.nyelv,22)+uzenet);
+
+					bans[config.ToLowercase(itoa(socketek[i]->context.ip))] = uzenet;
+					break;
+				}
+
+
+
+		}
 		if (command=="banlist" )
 		{
 			for(map<string,string>::iterator i=bans.begin();i!=bans.end();++i)
@@ -1301,16 +1378,28 @@ protected:
 		else
 		if (command=="disablekill")
 			{
-				StartEvent("disablekill");
+				StartEvent("disablekill",false);
 				disablekill=true;
 			}
 		else
 		if (command=="enablekill")
 			{
-				StartEvent("enablekill");
+				StartEvent("enablekill",false);
 				disablekill=false;
 			}
-
+		else
+		if (command=="startkbwar")
+			{
+				kbwar_active = true;
+				SendChatToAll("KBWAR bekapcsolva!");
+			}
+		else
+		if (command=="stopkbwar")
+			{
+				kbwar_active = false;
+				
+				StartEvent("kbwar",false,0);
+			}
 
 	}
 
@@ -1592,14 +1681,14 @@ protected:
 		}
 	}
 
-	void StartEvent(const string &nev)
+	void StartEvent(const string &nev,bool medal = true,int phase = 0)
 	{
 		unsigned n=socketek.size();
 		for(unsigned i=0;i<n;++i)
 			if (socketek[i]->context.loggedin)
 			{
-				AddMedal(*socketek[i],'S'|('P'<<8));
-				SendEvent(*socketek[i],nev,0);
+				if (medal) AddMedal(*socketek[i],'S'|('P'<<8));
+				SendEvent(*socketek[i],nev,phase);
 			}
 	}
 	
@@ -1789,7 +1878,7 @@ public:
 
 	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
 		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15),
-		laststatusfile(0),disablekill(0),timer_active(0)
+		laststatusfile(0),disablekill(0),timer_active(0),lastsecond(0),kbwar_active(0)
 	{
 		feature1v1gamesActive = false;
 		
@@ -1835,8 +1924,38 @@ public:
 		}
 
 
+		unsigned long long tick = GetTickCount64();
 
-		if (lastUDB<GetTickCount64()-300000)//5 percenként.
+		if (lastsecond<tick)	// Minden másodpercben
+		{
+
+			time_t now = time(NULL);
+			struct tm time = *localtime(&now);
+
+			if ((time.tm_hour==8 || time.tm_hour==17 || time.tm_hour==20) &&
+				time.tm_min==04 && time.tm_sec==0 && !kbwar_active)
+			{
+				kbwar_active = true;
+				SendChatToAll("Elkezdõdött a KBWAR!",0,true);
+				SendChatToAll("\x11\x01Elkezdõdött a KBWAR!",0,false);
+				SendChatToAll("\x11\x01A KBWAR játékhoz a /kbwar paranccsal lehet csatlakozni.");
+			}
+			
+			if ((time.tm_hour==8 || time.tm_hour==17 || time.tm_hour==20) &&
+				time.tm_min==05 && time.tm_sec==0 && kbwar_active)
+			{
+				kbwar_active = false;
+				SendChatToAll("Befejezõdött a KBWAR.",0,true);
+				SendChatToAll("\x11\x01Befejezõdött a KBWAR!",0,false);
+
+				StartEvent("kbwar",false,0);
+			}
+
+
+			lastsecond = tick+1000;
+		}
+
+		if (lastUDB<tick-300000)//5 percenként.
 		{
 
 			UpdateDb();
@@ -1847,7 +1966,7 @@ public:
 			config.reload();
 			cout << "cfg reloaded: version " << config.clientversion << "\n";
 
-			lastUDB=GetTickCount64();
+			tick=lastUDB=GetTickCount64();
 
 			int n=socketek.size();
 			for(int i=0;i<n;++i)
@@ -1857,7 +1976,7 @@ public:
 
 		TBufferedServer<TStickContext>::Update();
 
-		if (lastweather<GetTickCount64()-120000)// 2 percenként üzi
+		if (lastweather<tick-120000)// 2 percenként üzi
 		{
 
 			SendChatToAll("\x11\x01"+autoMsg.randomMessage(),false);
@@ -1875,17 +1994,21 @@ public:
 					SendWeather(*socketek[i],weathermost);
 			lastweather=GetTickCount64();
 		}
-		if (laststatusfile<GetTickCount64()-60000)//percenként
+
+		if (laststatusfile<GetTickCount64()-60000)// egész percenként
 		{
 			ofstream fil("status");
 			fil<<socketek.size();
 			laststatusfile=GetTickCount64();
 		}
-		if (nextevent<GetTickCount64())
+
+		if (nextevent<GetTickCount64()) // spaceship határidõ
 		{
 			StartEvent("spaceship");
-			nextevent=GetTickCount64()+12*3600*1000+rand()%(24*3600*1000);
+			nextevent=tick+12*3600*1000+rand()%(24*3600*1000);
 		}
+
+
 		// timer kiírás
 		if (timer_active) 
 		{
