@@ -49,6 +49,11 @@ using namespace std;
 	 string player1,player2;
 	 int score1,score2;
  };
+
+ struct HourMinute{
+	int hour,minute;
+	HourMinute(int h,int m){hour=h; minute=m;}
+ };
  
 
 
@@ -64,6 +69,9 @@ using namespace std;
 	vector<string> csunyaszavak;	//cenzúrázandó szavak
 	vector<string> viragnevek;		//amivel lecseréljük a cenzúrázandó szavakat.
 	vector<string> adminok;			//adminok listája
+	vector<HourMinute> kbstarttimes;	//kbstartidõk
+	vector<HourMinute> kbstoptimes;		//kbstopidõk
+
 	string cfgsource;				//a config fájl helye
 
 	TConfig(const string& honnan)
@@ -92,6 +100,7 @@ using namespace std;
 		fil>>webinterfaceup;
 
 		string tmpstr;
+		vector<string> tmpvec;
 
 		fil>>tmpstr; 
 		adminok=explode(tmpstr,",");
@@ -106,6 +115,34 @@ using namespace std;
 
 		fil>>tmpstr; 
 		viragnevek=explode(tmpstr,",");
+
+		tmpvec.clear();
+		kbstarttimes.clear();
+		kbstoptimes.clear();
+
+		fil>>tmpstr; 
+		tmpvec=explode(tmpstr,",");
+		for (int i=0;i<tmpvec.size();i++)
+		{
+			kbstarttimes.push_back(HourMinute(
+				atoi(tmpvec[i].substr(0,2).c_str()),
+				atoi(tmpvec[i].substr(3,2).c_str())
+				));
+		}
+
+		tmpvec.clear();
+
+		fil>>tmpstr; 
+		tmpvec=explode(tmpstr,",");
+		for (int i=0;i<tmpvec.size();i++)
+		{
+			kbstoptimes.push_back(HourMinute(
+				atoi(tmpvec[i].substr(0,2).c_str()),
+				atoi(tmpvec[i].substr(3,2).c_str())
+				));
+		}
+
+		fil.close();
 	}
 
 	const string ToLowercase(const string& mit) const
@@ -973,6 +1010,14 @@ protected:
 		return !s.empty() && it == s.end();
 	}
 
+	string twodigititoa(int num)
+	{
+		string a = itoa(num);
+		if (num<10) 
+			a = "0" + a;
+		return a;
+	}
+
 	void ChatCommand(TMySocket& sock,const string& command,const string& parameter)
 	{
 		/* user commandok */
@@ -1035,6 +1080,50 @@ protected:
 			for(int i=0;i<n;++i)
 				if (socketek[i]->context.clan==sock.context.clan)
 					SendChat(*socketek[i],uzenet,sock.context.glyph);
+		}else
+		if((command=="stat"))
+		{
+			
+			string uzenet;
+			int n=socketek.size();
+
+			int kbwarnum = 0;
+			int i1v1num = 0;
+			int mainrealm = 0;
+
+			for(int i=0;i<n;++i)
+			{
+				if (socketek[i]->context.kbwar) kbwarnum++;
+				if (socketek[i]->context.is1v1) i1v1num++;
+				if (socketek[i]->context.realm=="") mainrealm++;
+			}
+
+			SendChat(sock,"Connected players:"+itoa(n));
+			SendChat(sock,"Players on main realm:"+itoa(mainrealm));
+			SendChat(sock,"Players on other realms:"+itoa(n-mainrealm));
+			SendChat(sock,"Players playing kbwar:"+itoa(kbwarnum));
+			SendChat(sock,"Players playing 1v1:"+itoa(i1v1num));
+
+			if (sock.context.admin)
+			{
+				SendChat(sock,"Server version:"+itoa(config.clientversion));
+
+				string list;
+				for (int j=0;j<config.adminok.size();j++)
+					list += config.adminok[j]+" ";
+				SendChat(sock,"Admins:"+list);
+			}
+
+
+		}else
+		if((command=="time"))
+		{
+
+			time_t now = time(NULL);
+			struct tm time = *localtime(&now);
+
+			SendChat(sock,"Server time:"+itoa(time.tm_hour)+":"+itoa(time.tm_min)+":"+itoa(time.tm_sec));
+
 		}else
 		if (command=="1v1")
 		{
@@ -1210,20 +1299,33 @@ protected:
 				if (!sock.context.kbwar)
 				{
 				SendEvent(sock,"kbwar",1);	
-				SendChat(sock,"\x11\x01 Beszálltál a KBWARba.");
+				SendChat(sock,string("\x11\x01")+lang(sock.context.nyelv,55)+"KBWAR"+lang(sock.context.nyelv,56));
 				sock.context.kbwar = true;
 				}
 				else
 				{
 				SendEvent(sock,"kbwar",0);	
-				SendChat(sock,"\x11\x01 Kiszálltál a KBWARból.");
+				SendChat(sock,string("\x11\x01")+lang(sock.context.nyelv,57)+"KBWAR"+lang(sock.context.nyelv,58));
 				sock.context.kbwar = false;
 				}
 			}
 			else
 			{
-				SendChat(sock,"\x11\x01 Most nincs KBWAR.");
-				SendChat(sock,"\x11\x01 Minden nap 14:00-14:30, 17:00-17:30 és 20:00-20:30 között van.");
+				SendChat(sock,string("\x11\x01")+lang(sock.context.nyelv,59)+"KBWAR"+lang(sock.context.nyelv,60));
+				string uzi = lang(sock.context.nyelv,61);
+				
+				int len = min(config.kbstarttimes.size(),config.kbstoptimes.size());
+
+				for (int i=0; i<len;i++)
+				{
+					if (i>0) uzi+=", ";
+					uzi+=twodigititoa(config.kbstarttimes[i].hour)+":"+twodigititoa(config.kbstarttimes[i].minute)+"-";
+					uzi+=twodigititoa(config.kbstoptimes[i].hour)+":"+twodigititoa(config.kbstoptimes[i].minute);
+				}
+
+				uzi+= lang(sock.context.nyelv,62);
+				
+				SendChat(sock,string("\x11\x01")+uzi);
 			}
 		}
 
@@ -1234,6 +1336,11 @@ protected:
 		if (command=="ann" || command=="announce")
 		{
 			SendChatToAll(parameter,0,1);
+		}
+		else
+		if (command=="reload")
+		{
+			config.reload();
 		}
 		else
 		if (command=="auto1v1")
@@ -1394,7 +1501,7 @@ protected:
 		if (command=="startkbwar")
 			{
 				kbwar_active = true;
-				SendChatToAll("KBWAR bekapcsolva!");
+				SendChatToAll(lang(sock.context.nyelv,63)+"KBWAR"+lang(sock.context.nyelv,64));
 			}
 		else
 		if (command=="stopkbwar")
@@ -1402,6 +1509,7 @@ protected:
 				kbwar_active = false;
 				
 				StartEvent("kbwar",false,0);
+				SendChatToAll(lang(sock.context.nyelv,63)+"KBWAR"+lang(sock.context.nyelv,65));
 			}
 
 	}
@@ -1929,33 +2037,48 @@ public:
 
 		unsigned long long tick = GetTickCount64();
 
-		if (lastsecond<tick)	// Minden másodpercben
+		if (lastsecond<tick)	// Minden 5 másodpercben
 		{
 
 			time_t now = time(NULL);
 			struct tm time = *localtime(&now);
 
-			if ((time.tm_hour==8 || time.tm_hour==17 || time.tm_hour==20) &&
-				time.tm_min==04 && time.tm_sec==0 && !kbwar_active)
-			{
-				kbwar_active = true;
-				SendChatToAll("Elkezdõdött a KBWAR!",0,true);
-				SendChatToAll("\x11\x01Elkezdõdött a KBWAR!",0,false);
-				SendChatToAll("\x11\x01A KBWAR játékhoz a /kbwar paranccsal lehet csatlakozni.");
-			}
+			for (int i=0;i<config.kbstarttimes.size();i++)
+				if (time.tm_hour==config.kbstarttimes[i].hour &&
+					time.tm_sec==config.kbstarttimes[i].minute && 
+					!kbwar_active)
+				{
+					kbwar_active = true;
+					int n=socketek.size();
+					for(int i=0;i<n;++i)
+					{
+						SendChat(*socketek[i],lang(socketek[i]->context.nyelv,63)+"KBWAR"+lang(socketek[i]->context.nyelv,64));
+						SendChat(*socketek[i],string("\x11\x01") + lang(socketek[i]->context.nyelv,66));
+						SendBigText(*socketek[i],lang(socketek[i]->context.nyelv,63)+"KBWAR"+lang(socketek[i]->context.nyelv,64));
+					}
+
+				}
 			
-			if ((time.tm_hour==8 || time.tm_hour==17 || time.tm_hour==20) &&
-				time.tm_min==05 && time.tm_sec==0 && kbwar_active)
+
+			for (int i=0;i<config.kbstoptimes.size();i++)
+				if (time.tm_hour==config.kbstoptimes[i].hour &&
+					time.tm_sec==config.kbstoptimes[i].minute && 
+					kbwar_active)
 			{
 				kbwar_active = false;
-				SendChatToAll("Befejezõdött a KBWAR.",0,true);
-				SendChatToAll("\x11\x01Befejezõdött a KBWAR!",0,false);
 
 				StartEvent("kbwar",false,0);
+				
+				int n=socketek.size();
+				for(int i=0;i<n;++i)
+				{
+					SendChat(*socketek[i],lang(socketek[i]->context.nyelv,63)+"KBWAR"+lang(socketek[i]->context.nyelv,65));
+					SendBigText(*socketek[i],lang(socketek[i]->context.nyelv,63)+"KBWAR"+lang(socketek[i]->context.nyelv,65));
+				}
 			}
 
 
-			lastsecond = tick+1000;
+			lastsecond = tick+5000;
 		}
 
 		if (lastUDB<tick-300000)//5 percenként.
