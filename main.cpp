@@ -2045,7 +2045,7 @@ public:
 
 			for (unsigned int i=0;i<config.kbstarttimes.size();i++)
 				if (time.tm_hour==config.kbstarttimes[i].hour &&
-					time.tm_sec==config.kbstarttimes[i].minute && 
+					time.tm_min==config.kbstarttimes[i].minute && 
 					!kbwar_active)
 				{
 					kbwar_active = true;
@@ -2062,7 +2062,7 @@ public:
 
 			for (unsigned int i=0;i<config.kbstoptimes.size();i++)
 				if (time.tm_hour==config.kbstoptimes[i].hour &&
-					time.tm_sec==config.kbstoptimes[i].minute && 
+					time.tm_min==config.kbstoptimes[i].minute && 
 					kbwar_active)
 			{
 				kbwar_active = false;
