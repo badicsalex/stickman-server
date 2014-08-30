@@ -122,7 +122,7 @@ using namespace std;
 
 		fil>>tmpstr; 
 		tmpvec=explode(tmpstr,",");
-		for (int i=0;i<tmpvec.size();i++)
+		for (unsigned int i=0;i<tmpvec.size();i++)
 		{
 			kbstarttimes.push_back(HourMinute(
 				atoi(tmpvec[i].substr(0,2).c_str()),
@@ -134,7 +134,7 @@ using namespace std;
 
 		fil>>tmpstr; 
 		tmpvec=explode(tmpstr,",");
-		for (int i=0;i<tmpvec.size();i++)
+		for (unsigned int i=0;i<tmpvec.size();i++)
 		{
 			kbstoptimes.push_back(HourMinute(
 				atoi(tmpvec[i].substr(0,2).c_str()),
@@ -2043,7 +2043,7 @@ public:
 			time_t now = time(NULL);
 			struct tm time = *localtime(&now);
 
-			for (int i=0;i<config.kbstarttimes.size();i++)
+			for (unsigned int i=0;i<config.kbstarttimes.size();i++)
 				if (time.tm_hour==config.kbstarttimes[i].hour &&
 					time.tm_sec==config.kbstarttimes[i].minute && 
 					!kbwar_active)
@@ -2060,7 +2060,7 @@ public:
 				}
 			
 
-			for (int i=0;i<config.kbstoptimes.size();i++)
+			for (unsigned int i=0;i<config.kbstoptimes.size();i++)
 				if (time.tm_hour==config.kbstoptimes[i].hour &&
 					time.tm_sec==config.kbstoptimes[i].minute && 
 					kbwar_active)
