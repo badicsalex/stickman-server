@@ -808,7 +808,7 @@ protected:
 	}
 
 	void SendWarEvent(TMySocket& sock, bool isCoords, bool active, bool dm, const string &nev, 
-		byte guncoordszam, byte techcoordszam, vector<int> spawns, char respawn, char invul)
+		char guncoordszam, char techcoordszam, vector<int> spawns, char respawn, char invul)
 	{
 
 		/*
