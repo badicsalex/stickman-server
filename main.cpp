@@ -54,8 +54,20 @@ using namespace std;
 	int hour,minute;
 	HourMinute(int h,int m){hour=h; minute=m;}
  };
- 
 
+struct WarEvent{
+	string name;					//id és a parancs neve
+	bool dm;						//ha a 'spawns' koordinátákat használjuk, deathmatch
+	bool restricted;				//ha a szerver korlátozza, hogy mikor futtatható
+	bool active;					//ha egy korlázotott event éppen fut
+	vector<HourMinute> starttimes;	//startidõk
+	vector<HourMinute> stoptimes;	//stopidõk
+	vector<int> spawns;			//ha dm, akkor spawnpontok, 3 ilyen ad egy koordinátát
+	vector<int> gunspawns;		//ha nem dm, akkor gun spawn
+	vector<int> techspawns;		//ha nem dm, akkor tech spawn
+	unsigned char respawn;			//respawn delay, mp (most ez -1 a tényleges)
+	unsigned char invul;			//sebezhetetlenség, mp
+};
 
  struct TConfig{
 	int clientversion;				//kliens verzió, ez alatt kickel
@@ -69,10 +81,8 @@ using namespace std;
 	vector<string> csunyaszavak;	//cenzúrázandó szavak
 	vector<string> viragnevek;		//amivel lecseréljük a cenzúrázandó szavakat.
 	vector<string> adminok;			//adminok listája
-	vector<HourMinute> kbstarttimes;	//kbstartidõk
-	vector<HourMinute> kbstoptimes;		//kbstopidõk
-
 	string cfgsource;				//a config fájl helye
+	vector<WarEvent> warevents;
 
 	TConfig(const string& honnan)
 	{
@@ -101,6 +111,7 @@ using namespace std;
 
 		string tmpstr;
 		vector<string> tmpvec;
+		vector<string> tmpvec2;
 
 		fil>>tmpstr; 
 		adminok=explode(tmpstr,",");
@@ -116,32 +127,115 @@ using namespace std;
 		fil>>tmpstr; 
 		viragnevek=explode(tmpstr,",");
 
-		tmpvec.clear();
-		kbstarttimes.clear();
-		kbstoptimes.clear();
+		warevents.clear();
 
-		fil>>tmpstr; 
-		tmpvec=explode(tmpstr,",");
-		for (unsigned int i=0;i<tmpvec.size();i++)
+		while(fil>>tmpstr && tmpstr=="warevent")
 		{
-			kbstarttimes.push_back(HourMinute(
-				atoi(tmpvec[i].substr(0,2).c_str()),
-				atoi(tmpvec[i].substr(3,2).c_str())
-				));
+			fil>>tmpstr;
+			if (tmpstr=="eventtype_team")
+			{
+				warevents.push_back(WarEvent());
+				warevents.back().dm=false;
+				fil>>tmpstr;
+				warevents.back().name=tmpstr;
+				fil>>tmpstr;
+				if (tmpstr=="restrict:")
+				{
+					fil>>tmpstr;
+					warevents.back().restricted=true;
+					tmpvec=explode(tmpstr,",");
+					for (unsigned int i=0;i<tmpvec.size();i++)
+					{
+						warevents.back().starttimes.push_back(HourMinute(
+							atoi(tmpvec[i].substr(0,2).c_str()),
+							atoi(tmpvec[i].substr(3,2).c_str())
+							));
+					}
+					fil>>tmpstr;
+					tmpvec=explode(tmpstr,",");
+					for (unsigned int i=0;i<tmpvec.size();i++)
+					{
+						warevents.back().stoptimes.push_back(HourMinute(
+							atoi(tmpvec[i].substr(0,2).c_str()),
+							atoi(tmpvec[i].substr(3,2).c_str())
+							));
+					}
+					fil>>tmpstr;//ez már más
+				}
+				else
+				{
+					warevents.back().restricted=false;
+				}
+				//már van egy string
+				tmpvec=explode(tmpstr,";");
+				for (unsigned i=0;i<tmpvec.size();i++)
+				{
+					tmpvec2=explode(tmpvec.at(i),",");
+					for (unsigned j=0;j<tmpvec2.size();j++)
+						warevents.back().gunspawns.push_back((int)(atof(tmpvec2.at(j).c_str())*1000));
+				}
+				fil>>tmpstr;
+				tmpvec=explode(tmpstr,";");
+				for (unsigned i=0;i<tmpvec.size();i++)
+				{
+					tmpvec2=explode(tmpvec.at(i),",");
+					for (unsigned j=0;j<tmpvec2.size();j++)
+						warevents.back().techspawns.push_back((int)(atof(tmpvec2.at(j).c_str())*1000));
+				}
+				fil>>tmpstr;
+				warevents.back().respawn=(char)atoi(tmpstr.c_str());
+				fil>>tmpstr;
+				warevents.back().invul=(char)atoi(tmpstr.c_str());
+				warevents.back().active=false;
+			}
+			else if (tmpstr=="eventtype_dm")
+			{
+				warevents.push_back(WarEvent());
+				warevents.back().dm=true;
+				fil>>tmpstr;
+				warevents.back().name=tmpstr;
+				fil>>tmpstr;
+				if (tmpstr=="restrict:")
+				{
+					fil>>tmpstr;
+					warevents.back().restricted=true;
+					tmpvec=explode(tmpstr,",");
+					for (unsigned int i=0;i<tmpvec.size();i++)
+					{
+						warevents.back().starttimes.push_back(HourMinute(
+							atoi(tmpvec[i].substr(0,2).c_str()),
+							atoi(tmpvec[i].substr(3,2).c_str())
+							));
+					}
+					fil>>tmpstr;
+					tmpvec=explode(tmpstr,",");
+					for (unsigned int i=0;i<tmpvec.size();i++)
+					{
+						warevents.back().stoptimes.push_back(HourMinute(
+							atoi(tmpvec[i].substr(0,2).c_str()),
+							atoi(tmpvec[i].substr(3,2).c_str())
+							));
+					}
+					fil>>tmpstr;
+				}
+				else
+				{
+					warevents.back().restricted=false;
+				}
+				tmpvec=explode(tmpstr,";");
+				for (unsigned i=0;i<tmpvec.size();i++)
+				{
+					tmpvec2=explode(tmpvec.at(i),",");
+					for (unsigned j=0;j<tmpvec2.size();j++)
+						warevents.back().spawns.push_back((int)(atof(tmpvec2.at(j).c_str())*1000));
+				}
+				fil>>tmpstr;
+				warevents.back().respawn=(char)atoi(tmpstr.c_str());
+				fil>>tmpstr;
+				warevents.back().invul=(char)atoi(tmpstr.c_str());
+				warevents.back().active=false;
+			}
 		}
-
-		tmpvec.clear();
-
-		fil>>tmpstr; 
-		tmpvec=explode(tmpstr,",");
-		for (unsigned int i=0;i<tmpvec.size();i++)
-		{
-			kbstoptimes.push_back(HourMinute(
-				atoi(tmpvec[i].substr(0,2).c_str()),
-				atoi(tmpvec[i].substr(3,2).c_str())
-				));
-		}
-
 		fil.close();
 	}
 
@@ -249,7 +343,7 @@ struct TStickContext{
 	bool is1v1;
 	bool verified;
 	bool realmAdmin;
-	bool kbwar;
+	string currentEvent;
 
 	//1v1games
 	bool readyFor1v1Games;
@@ -268,6 +362,7 @@ struct TStickContext{
 	unsigned long long floodtime;
 	string realm;
 	int lastwhisp;
+	string currentWarEvent;
 };
 
 
@@ -282,7 +377,6 @@ struct TStickRecord{
 	int level;
 	int kills;
 };
-
 
 
 #define VARAKOZAS 0
@@ -401,6 +495,24 @@ int fegyvtoint(int i)
   string medalid
 */
 
+#define SERVERMSG_WAREVENT 10
+/*
+  char > 0.b koordináta vagy sem, 1.b aktív, 2.b dm
+  string név
+  byte respawn
+  byte invul
+vagy
+  char > 0.b koordináta vagy sem
+  byte gun koordinátaszám
+  byte tech koordinátaszám
+  single-k hármasával, koordináták
+*/
+
+#define SERVERMSG_TELEPORT 11
+/*
+  string coords
+*/
+
 class StickmanServer: public TBufferedServer<TStickContext>{
 protected:
 	const TSimpleLang lang;
@@ -420,7 +532,6 @@ protected:
 	unsigned long long lastUDB;
 	unsigned long long nextevent;
 
-
 	time_t lastUDBsuccess;
 	
 	unsigned long long lastweather;
@@ -432,8 +543,6 @@ protected:
 
 	struct tm timer;
 	bool timer_active;
-	bool kbwar_active;
-
 
 	TMySocket* getSocketByName(const string nev)
 	{
@@ -698,6 +807,48 @@ protected:
 		sock.SendFrame(frame);
 	}
 
+	void SendWarEvent(TMySocket& sock, bool isCoords, bool active, bool dm, const string &nev, 
+		byte guncoordszam, byte techcoordszam, vector<int> spawns, char respawn, char invul)
+	{
+
+		/*
+  char > 0.b koordináta vagy sem, 1.b aktív, 2.b dm
+  string név
+  byte respawn
+  byte invul
+vagy
+  char > 0.b koordináta vagy sem
+  byte gun koordinátaszám
+  byte tech koordinátaszám
+  single-k hármasával, koordináták
+*/
+		char info = 0;
+		if (isCoords)
+			info |= (1 << 7);
+		if (active)
+			info |= (1 << 6);
+		if (dm)
+			info |= (1 << 5);
+
+		TSocketFrame frame;
+		frame.WriteChar(SERVERMSG_WAREVENT);
+		frame.WriteChar(info);
+
+		if (isCoords)
+		{
+			frame.WriteChar(guncoordszam/3);
+			frame.WriteChar(techcoordszam/3);
+			for (unsigned i=0;i<spawns.size();i++)
+				frame.WriteInt(spawns.at(i));
+		}
+		else
+		{
+			frame.WriteString(nev);
+			frame.WriteChar(respawn);
+			frame.WriteChar(invul);
+		}
+		sock.SendFrame(frame);
+	}
 
 	void OnMsgLogin(TMySocket& sock,TSocketFrame& msg)
 	{
@@ -706,10 +857,8 @@ protected:
 		
 		sock.context.is1v1 = false;
 		sock.context.realmAdmin = false;
-		sock.context.kbwar = false;
+		sock.context.currentEvent = "";
 		
-		
-
 		if (nyelv!=14)
 			nyelv=0;
 
@@ -1087,13 +1236,11 @@ protected:
 			string uzenet;
 			int n=socketek.size();
 
-			int kbwarnum = 0;
 			int i1v1num = 0;
 			int mainrealm = 0;
 
 			for(int i=0;i<n;++i)
 			{
-				if (socketek[i]->context.kbwar) kbwarnum++;
 				if (socketek[i]->context.is1v1) i1v1num++;
 				if (socketek[i]->context.realm=="") mainrealm++;
 			}
@@ -1101,7 +1248,6 @@ protected:
 			SendChat(sock,"Connected players:"+itoa(n));
 			SendChat(sock,"Players on main realm:"+itoa(mainrealm));
 			SendChat(sock,"Players on other realms:"+itoa(n-mainrealm));
-			SendChat(sock,"Players playing kbwar:"+itoa(kbwarnum));
 			SendChat(sock,"Players playing 1v1:"+itoa(i1v1num));
 
 			if (sock.context.admin)
@@ -1292,6 +1438,7 @@ protected:
 				}
 			}
 		else
+			/*
 		if (command=="kbwar")
 		{
 			if (kbwar_active)
@@ -1326,6 +1473,50 @@ protected:
 				uzi+= lang(sock.context.nyelv,62);
 				
 				SendChat(sock,string("\x11\x01")+uzi);
+			}
+		}*/
+
+		for (unsigned i=0; i<config.warevents.size();i++)
+		{
+			if (command==config.warevents.at(i).name)
+			{
+				WarEvent &e = config.warevents.at(i);
+				if (sock.context.currentWarEvent==e.name)
+				{
+					PreSendWarEvent(sock, e, 0);
+					sock.context.currentWarEvent="";
+					SendChat(sock,string("\x11\x01")+lang(sock.context.nyelv,57)+e.name+lang(sock.context.nyelv,58));
+				}
+				else
+				{
+					if (e.restricted && e.active)
+					{
+						PreSendWarEvent(sock, e, 1);
+						sock.context.currentWarEvent=e.name;
+						SendChat(sock,string("\x11\x01")+lang(sock.context.nyelv,55)+e.name+lang(sock.context.nyelv,56));
+					}
+					else if (e.restricted && !e.active)
+					{
+						string uzi = lang(sock.context.nyelv,61);
+						int len = min(e.starttimes.size(),e.stoptimes.size()); //wat?
+
+						for (int i=0; i<len;i++)
+						{
+							if (i>0) uzi+=", ";
+							uzi+=twodigititoa(e.starttimes[i].hour)+":"+twodigititoa(e.starttimes[i].minute)+"-";
+							uzi+=twodigititoa(e.stoptimes[i].hour)+":"+twodigititoa(e.stoptimes[i].minute);
+						}
+						uzi+= lang(sock.context.nyelv,62);
+						SendChat(sock,string("\x11\x01")+uzi);
+						SendChat(sock,string("\x11\x01")+lang(sock.context.nyelv,59)+e.name+lang(sock.context.nyelv,60));
+					}
+					else if (!e.restricted)
+					{
+						PreSendWarEvent(sock, e, 1);
+						sock.context.currentWarEvent=e.name;
+						SendChat(sock,string("\x11\x01")+lang(sock.context.nyelv,55)+e.name+lang(sock.context.nyelv,56));
+					}
+				}
 			}
 		}
 
@@ -1434,18 +1625,15 @@ protected:
 
 
 			for(unsigned i=0;i<n;++i)
-				if (socketek[i]->context.UID==kickuid)
-				{
-					SendKick(*socketek[i],sock.context.nev+lang(sock.context.nyelv,35)+uzenet,true);
-					SendChatToAll("\x11\xe0"+sock.context.nev+lang(sock.context.nyelv,36)+"\x11\x03"+
-								  socketek[i]->context.nev+"\x11\xe0"+lang(sock.context.nyelv,22)+uzenet);
+			if (socketek[i]->context.UID==kickuid)
+			{
+				SendKick(*socketek[i],sock.context.nev+lang(sock.context.nyelv,35)+uzenet,true);
+				SendChatToAll("\x11\xe0"+sock.context.nev+lang(sock.context.nyelv,36)+"\x11\x03"+
+								socketek[i]->context.nev+"\x11\xe0"+lang(sock.context.nyelv,22)+uzenet);
 
-					bans[config.ToLowercase(itoa(socketek[i]->context.ip))] = uzenet;
-					break;
-				}
-
-
-
+				bans[config.ToLowercase(itoa(socketek[i]->context.ip))] = uzenet;
+				break;
+			}
 		}
 		if (command=="banlist" )
 		{
@@ -1492,26 +1680,28 @@ protected:
 				disablekill=true;
 			}
 		else
-		if (command=="enablekill")
+		for (unsigned i=0; i<config.warevents.size();i++)
+		{
+			if (command=="start"+config.warevents.at(i).name)
 			{
-				StartEvent("enablekill",false);
-				disablekill=false;
+				WarEvent &w = config.warevents.at(i);
+				if (w.restricted)
+				{
+					w.active=true;
+					SendChatToAll(lang(sock.context.nyelv,63)+w.name+lang(sock.context.nyelv,64));
+				}
 			}
-		else
-		if (command=="startkbwar")
+			if (command=="stop"+config.warevents.at(i).name)
 			{
-				kbwar_active = true;
-				SendChatToAll(lang(sock.context.nyelv,63)+"KBWAR"+lang(sock.context.nyelv,64));
+				WarEvent &w = config.warevents.at(i);
+				if (w.restricted)
+				{
+					w.active=false;
+					StopWarEvent(w);
+					SendChatToAll(lang(sock.context.nyelv,63)+w.name+lang(sock.context.nyelv,65));
+				}
 			}
-		else
-		if (command=="stopkbwar")
-			{
-				kbwar_active = false;
-				
-				StartEvent("kbwar",false,0);
-				SendChatToAll(lang(sock.context.nyelv,63)+"KBWAR"+lang(sock.context.nyelv,65));
-			}
-
+		}
 	}
 
 	void ChatCleanup(string& uzenet)
@@ -1741,7 +1931,7 @@ protected:
 			socketek[i]->context.kills+=1;
 
 			SendChat(*socketek[i],"\x11\x01"+lang(socketek[i]->context.nyelv,27)+"\x11\x03"+sock.context.nev+"\x11\x01"+lang(socketek[i]->context.nyelv,28));
-			SendChat(sock,"\x11\x01"+lang(sock.context.nyelv,29)+"\x11\x03"+socketek[i]->context.nev+" \x11\x01"+lang(sock.context.nyelv,30));
+			SendChat(sock,"\x11\x01"+lang(sock.context.nyelv,29)+"\x11\x03"+socketek[i]->context.nev+"\x11\x01"+lang(sock.context.nyelv,30));
 			if (!sock.context.verified)	return;
 
 			if(socketek[i]->context.registered)
@@ -1801,6 +1991,40 @@ protected:
 				if (medal) AddMedal(*socketek[i],'S'|('P'<<8));
 				SendEvent(*socketek[i],nev,phase);
 			}
+	}
+
+	void StopWarEvent(WarEvent e)
+	{
+		
+		unsigned n=socketek.size();
+		for(unsigned i=0;i<n;++i)
+		{
+			if (socketek[i]->context.loggedin)
+				if (socketek[i]->context.currentWarEvent==e.name)
+				PreSendWarEvent(*socketek[i], e, 0);
+		}
+	}
+
+	void PreSendWarEvent(TMySocket &sock, WarEvent e, char active)
+	{
+		if (active)
+		{
+			SendWarEvent(sock,false,active,e.dm,e.name,0,0,vector<int>(),e.respawn,e.invul);
+			if (e.dm)
+			{
+				SendWarEvent(sock,true,active,e.dm,"",e.spawns.size(),0,e.spawns,e.respawn,e.invul);
+			}
+			else
+			{
+				vector<int> tmpvec=e.gunspawns;
+				tmpvec.insert(tmpvec.end(),e.techspawns.begin(),e.techspawns.end());
+				SendWarEvent(sock,true,active,e.dm,"",e.gunspawns.size(),e.techspawns.size(),tmpvec,e.respawn,e.invul);
+			}
+		}
+		else
+		{
+			SendWarEvent(sock,false,active,e.dm,e.name,0,0,vector<int>(),e.respawn,e.invul);
+		}
 	}
 	
 	void UpdateDb()
@@ -1961,7 +2185,7 @@ protected:
 		unsigned long long gtc=GetTickCount64();
 		/* 2000-2500 msenként küldünk playerlistát */
 		if (sock.context.loggedin &&
-			sock.context.lastsend<gtc-2000-(rand()&511))
+			sock.context.lastsend<gtc-2000-(rand()&501))
 		{
 			SendPlayerList(sock);
 			sock.context.lastsend=gtc;
@@ -1989,7 +2213,7 @@ public:
 
 	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
 		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15),
-		laststatusfile(0),disablekill(0),timer_active(0),lastsecond(0),kbwar_active(0)
+		laststatusfile(0),disablekill(0),timer_active(0),lastsecond(0)
 	{
 		feature1v1gamesActive = false;
 		
@@ -2037,53 +2261,52 @@ public:
 
 		unsigned long long tick = GetTickCount64();
 
-		if (lastsecond<tick)	// Minden 5 másodpercben
+		
+		if (lastsecond<tick-60000)	//percenként
 		{
-
+			lastsecond = tick;
 			time_t now = time(NULL);
 			struct tm time = *localtime(&now);
 
-			for (unsigned int i=0;i<config.kbstarttimes.size();i++)
-				if (time.tm_hour==config.kbstarttimes[i].hour &&
-					time.tm_min==config.kbstarttimes[i].minute && 
-					!kbwar_active)
-				{
-					kbwar_active = true;
-					int n=socketek.size();
-					for(int i=0;i<n;++i)
-					{
-						SendChat(*socketek[i],lang(socketek[i]->context.nyelv,63)+"KBWAR"+lang(socketek[i]->context.nyelv,64));
-						SendChat(*socketek[i],string("\x11\x01") + lang(socketek[i]->context.nyelv,66));
-						SendBigText(*socketek[i],lang(socketek[i]->context.nyelv,63)+"KBWAR"+lang(socketek[i]->context.nyelv,64));
-					}
-
-				}
-			
-
-			for (unsigned int i=0;i<config.kbstoptimes.size();i++)
-				if (time.tm_hour==config.kbstoptimes[i].hour &&
-					time.tm_min==config.kbstoptimes[i].minute && 
-					kbwar_active)
+			for (unsigned j=0;j<config.warevents.size();j++)
 			{
-				kbwar_active = false;
+				WarEvent &w = config.warevents.at(j);
+				for (unsigned int i=0;i<w.starttimes.size();i++)
+					if (time.tm_hour==w.starttimes[i].hour &&
+						time.tm_min==w.starttimes[i].minute && 
+						!w.active)
+					{
+						w.active = true;
+						int n=socketek.size();
+						for(int i=0;i<n;++i)
+						{
+							SendChat(*socketek[i],lang(socketek[i]->context.nyelv,63)+w.name+lang(socketek[i]->context.nyelv,64));
+							SendChat(*socketek[i],string("\x11\x01") + lang(socketek[i]->context.nyelv,66)+w.name);
+							SendBigText(*socketek[i],lang(socketek[i]->context.nyelv,63)+w.name+lang(socketek[i]->context.nyelv,64));
+						}
 
-				StartEvent("kbwar",false,0);
+					}
+				for (unsigned int i=0;i<w.stoptimes.size();i++)
+					if (time.tm_hour==w.stoptimes[i].hour &&
+						time.tm_min==w.stoptimes[i].minute && 
+						w.active)
+					{
+						w.active = false;
+
+						StopWarEvent(w);
 				
-				int n=socketek.size();
-				for(int i=0;i<n;++i)
-				{
-					SendChat(*socketek[i],lang(socketek[i]->context.nyelv,63)+"KBWAR"+lang(socketek[i]->context.nyelv,65));
-					SendBigText(*socketek[i],lang(socketek[i]->context.nyelv,63)+"KBWAR"+lang(socketek[i]->context.nyelv,65));
-				}
+						int n=socketek.size();
+						for(int i=0;i<n;++i)
+						{
+							SendChat(*socketek[i],lang(socketek[i]->context.nyelv,63)+w.name+lang(socketek[i]->context.nyelv,65));
+							SendBigText(*socketek[i],lang(socketek[i]->context.nyelv,63)+w.name+lang(socketek[i]->context.nyelv,65));
+						}
+					}
 			}
-
-
-			lastsecond = tick+5000;
 		}
-
-		if (lastUDB<tick-300000)//5 percenként.
+		
+		if (lastUDB<tick-300000) //5 percenként
 		{
-
 			UpdateDb();
 
 			SaveChatlog();
@@ -2102,7 +2325,7 @@ public:
 
 		TBufferedServer<TStickContext>::Update();
 
-		if (lastweather<tick-120000)// 2 percenként üzi
+		if (lastweather<tick-120000) //2 percenként üzi
 		{
 
 			SendChatToAll("\x11\x01"+autoMsg.randomMessage(),false);
@@ -2121,21 +2344,21 @@ public:
 			lastweather=GetTickCount64();
 		}
 
-		if (laststatusfile<GetTickCount64()-60000)// egész percenként
+		if (laststatusfile<GetTickCount64()-60000) //egész percenként
 		{
 			ofstream fil("status");
 			fil<<socketek.size();
 			laststatusfile=GetTickCount64();
 		}
 
-		if (nextevent<GetTickCount64()) // spaceship határidõ
+		if (nextevent<GetTickCount64()) //spaceship határidõ
 		{
 			StartEvent("spaceship");
 			nextevent=tick+12*3600*1000+rand()%(24*3600*1000);
 		}
 
 
-		// timer kiírás
+		//timer kiírás
 		if (timer_active) 
 		{
 			time_t now = time(NULL);
@@ -2151,8 +2374,6 @@ public:
 				timer_active = false;
 			}
 		}
-
-
 	}
 };
 
