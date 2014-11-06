@@ -237,6 +237,7 @@ struct WarEvent{
 			}
 		}
 		fil.close();
+		cout << "cfg reloaded: version " << config.clientversion << "\n";
 	}
 
 	const string ToLowercase(const string& mit) const
@@ -808,7 +809,7 @@ protected:
 	}
 
 	void SendWarEvent(TMySocket& sock, bool isCoords, bool active, bool dm, const string &nev, 
-		char guncoordszam, char techcoordszam, vector<int> spawns, char respawn, char invul)
+		byte guncoordszam, byte techcoordszam, vector<int> spawns, char respawn, char invul)
 	{
 
 		/*
@@ -2311,9 +2312,6 @@ public:
 
 			SaveChatlog();
 			autoMsg.load();
-
-			config.reload();
-			cout << "cfg reloaded: version " << config.clientversion << "\n";
 
 			tick=lastUDB=GetTickCount64();
 
