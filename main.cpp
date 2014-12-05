@@ -62,9 +62,9 @@ struct WarEvent{
 	bool active;					//ha egy korlázotott event éppen fut
 	vector<HourMinute> starttimes;	//startidõk
 	vector<HourMinute> stoptimes;	//stopidõk
-	vector<int> spawns;			//ha dm, akkor spawnpontok, 3 ilyen ad egy koordinátát
-	vector<int> gunspawns;		//ha nem dm, akkor gun spawn
-	vector<int> techspawns;		//ha nem dm, akkor tech spawn
+	vector<int> spawns;				//ha dm, akkor spawnpontok, 3 ilyen ad egy koordinátát
+	vector<int> gunspawns;			//ha nem dm, akkor gun spawn
+	vector<int> techspawns;			//ha nem dm, akkor tech spawn
 	unsigned char respawn;			//respawn delay, mp (most ez -1 a tényleges)
 	unsigned char invul;			//sebezhetetlenség, mp
 };
@@ -237,7 +237,7 @@ struct WarEvent{
 			}
 		}
 		fil.close();
-		//cout << "cfg reloaded: version " << config.clientversion << "\n";
+		cout << "cfg reloaded: version " << clientversion << "\n";
 	}
 
 	const string ToLowercase(const string& mit) const
@@ -298,25 +298,26 @@ struct autoMessages{
 
 } autoMsg("msglist.txt");
 
+#define	FEGYV_HOSSZ 9
 
 struct TKill{
 	TKill(){
-		for(int i=0;i<8;++i)
+		for(int i=0;i<FEGYV_HOSSZ;++i)
 			data[i]=0;
 	}
 	TKill(const TKill& honnan){
-		for(int i=0;i<8;++i)
+		for(int i=0;i<FEGYV_HOSSZ;++i)
 			data[i]=honnan.data[i];
 	}
 	TKill& operator=(const TKill& honnan){
-		for(int i=0;i<8;++i)
+		for(int i=0;i<FEGYV_HOSSZ;++i)
 			data[i]=honnan[i];
 		return *this;
 	}
 	int& operator[](int index){return data[index];}
 	const int& operator[](int index) const {return data[index];}
 private:
-	int data[8];
+	int data[FEGYV_HOSSZ];
 };
 
 struct T1v1Game{
@@ -384,7 +385,6 @@ struct TStickRecord{
 #define FOLYAMATBAN 1
 #define VEGE 2
 
-
 #define	FEGYV_M4A1 0
 #define	FEGYV_M82A1 1
 #define	FEGYV_LAW 2
@@ -395,11 +395,12 @@ struct TStickRecord{
 #define	FEGYV_NOOB 6
 #define	FEGYV_X72 7
 
-int fegyvtoint(int i)
+inline int fegyvtoint(int i)
 {
-	int t = i;
-	if (i>127) t= i-128+4;
-	return t%8;
+	if (i<128) // gun
+		return (i<4)?i:FEGYV_HOSSZ-1;
+	else // tech
+		return (i<127+4)?i-127:FEGYV_HOSSZ-1;
 };
 
 #define CLIENTMSG_LOGIN 1
@@ -471,7 +472,7 @@ int fegyvtoint(int i)
 
 #define SERVERMSG_WEATHER 5
 /*
-	byte mire
+	char mire
 */
 
 #define SERVERMSG_SENDUDP 6
@@ -500,12 +501,12 @@ int fegyvtoint(int i)
 /*
   char > 0.b koordináta vagy sem, 1.b aktív, 2.b dm
   string név
-  byte respawn
-  byte invul
+  char respawn
+  char invul
 vagy
   char > 0.b koordináta vagy sem
-  byte gun koordinátaszám
-  byte tech koordinátaszám
+  char gun koordinátaszám
+  char tech koordinátaszám
   single-k hármasával, koordináták
 */
 
@@ -742,13 +743,14 @@ protected:
 		fil.close();
 	}
 
-	void SendChat(TMySocket& sock,const string& uzenet,int showglyph=0)
+	void SendChat(TMySocket& sock,const string& uzenet,int showglyph=0, const string& name = "")
 	{
 		TSocketFrame frame;
 		frame.WriteChar(SERVERMSG_CHAT);
 		frame.WriteChar(0); // this is a normal chat msg
 		frame.WriteString(uzenet);
 		frame.WriteInt(showglyph);
+		frame.WriteString(name);
 		sock.SendFrame(frame);
 	}
 
@@ -811,18 +813,6 @@ protected:
 	void SendWarEvent(TMySocket& sock, bool isCoords, bool active, bool dm, const string &nev, 
 		char guncoordszam, char techcoordszam, vector<int> spawns, char respawn, char invul)
 	{
-
-		/*
-  char > 0.b koordináta vagy sem, 1.b aktív, 2.b dm
-  string név
-  byte respawn
-  byte invul
-vagy
-  char > 0.b koordináta vagy sem
-  byte gun koordinátaszám
-  byte tech koordinátaszám
-  single-k hármasával, koordináták
-*/
 		char info = 0;
 		if (isCoords)
 			info |= (1 << 7);
@@ -1233,8 +1223,6 @@ vagy
 		}else
 		if((command=="stat"))
 		{
-			
-			string uzenet;
 			int n=socketek.size();
 
 			int i1v1num = 0;
@@ -1246,22 +1234,29 @@ vagy
 				if (socketek[i]->context.realm=="") mainrealm++;
 			}
 
-			SendChat(sock,"Connected players:"+itoa(n));
-			SendChat(sock,"Players on main realm:"+itoa(mainrealm));
-			SendChat(sock,"Players on other realms:"+itoa(n-mainrealm));
-			SendChat(sock,"Players playing 1v1:"+itoa(i1v1num));
+			SendChat(sock,"Connected players: "+itoa(n));
+			SendChat(sock,"Players on main realm: "+itoa(mainrealm));
+			SendChat(sock,"Players on other realms: "+itoa(n-mainrealm));
+			SendChat(sock,"Players playing 1v1: "+itoa(i1v1num));
 
 			if (sock.context.admin)
 			{
-				SendChat(sock,"Server version:"+itoa(config.clientversion));
+				SendChat(sock,"Server version: "+itoa(config.clientversion));
 
 				string list;
 				for (int j=0;j<config.adminok.size();j++)
 					list += config.adminok[j]+" ";
-				SendChat(sock,"Admins:"+list);
+				SendChat(sock,"Admins: "+list);
 			}
 
+			string uzenet = "";
 
+			for (unsigned i=0; i<config.warevents.size();i++)
+				if (i==(config.warevents.size()-1))
+					uzenet+=config.warevents.at(i).name;
+				else
+					uzenet+=config.warevents.at(i).name + ", ";
+			SendChat(sock,"Available war events: " + uzenet);
 		}else
 		if((command=="time"))
 		{
@@ -1549,7 +1544,7 @@ vagy
 			for(unsigned i=0;i<n;++i)
 				SendWeather(*socketek[i],weathermost);
 		}else	
-		if (command=="countdown")
+/*		if (command=="countdown")
 		{
 			string humantime=parameter.c_str();
 			int ora = atoi(humantime.substr(0,2).c_str());
@@ -1567,36 +1562,46 @@ vagy
 			double diffd = difftime(mktime(&timer),now);
 			SendChat(sock,"Countdown started: "+itoa((int) diffd)+"sec",0);
 
-		}else	
+		}else	*/
 		if (command=="kick" || command=="ban")
 		{
 			unsigned n=socketek.size();
 			bool kick=command=="kick";
-
-			int kickuid = 0;
 			
-			if (is_number(parameter.c_str()))
-			{
-				kickuid=atoi(parameter.c_str());
-			}
-			else
-				for(unsigned i=0;i<n;++i)
-					if (config.ToLowercase(socketek[i]->context.nev)==config.ToLowercase(parameter))
-						kickuid=socketek[i]->context.UID;
+			int kickuid = 0;
 
 			int pos=parameter.find(' ');
 			string uzenet;
 			if(pos>0)
-				uzenet.assign(parameter.begin()+pos,parameter.end());
+			{
+				string name;
+				uzenet.assign(parameter.begin()+pos+1,parameter.end());
+				name=parameter.substr(0,pos);
+				if (is_number(name.c_str()))
+					kickuid=atoi(name.c_str());
+				else
+					for(unsigned i=0;i<n;++i)
+						if (config.ToLowercase(socketek[i]->context.nev)==config.ToLowercase(name))
+							kickuid=socketek[i]->context.UID;
+			}
 			else
-				uzenet=lang(sock.context.nyelv,19); //lol lang specifikus default kick
+			{
+				if (is_number(parameter.c_str()))
+					kickuid=atoi(parameter.c_str());
+				else
+					for(unsigned i=0;i<n;++i)
+						if (config.ToLowercase(socketek[i]->context.nev)==config.ToLowercase(parameter))
+							kickuid=socketek[i]->context.UID;
+			}
 			
 			for(unsigned i=0;i<n;++i)
 				if (socketek[i]->context.UID==kickuid)
 				{
-					SendKick(*socketek[i],sock.context.nev+lang(sock.context.nyelv,kick?20:35)+uzenet,true);
-					SendChatToAll("\x11\xe0"+sock.context.nev+lang(sock.context.nyelv,kick?21:36)+"\x11\x03"+
-								  socketek[i]->context.nev+"\x11\xe0"+lang(sock.context.nyelv,22)+uzenet);
+					if(pos<=0)
+						uzenet=lang(socketek[i]->context.nyelv,19);
+					SendKick(*socketek[i],socketek[i]->context.nev+lang(socketek[i]->context.nyelv,kick?20:35)+uzenet,true);
+					SendChatToAll("\x11\xe0"+socketek[i]->context.nev+lang(socketek[i]->context.nyelv,kick?21:36)+"\x11\x03"+
+								  socketek[i]->context.nev+"\x11\xe0"+lang(socketek[i]->context.nyelv,22)+uzenet);
 					if (!kick) 
 						bans[config.ToLowercase(socketek[i]->context.nev)]=uzenet;
 					break;
@@ -1679,6 +1684,12 @@ vagy
 			{
 				StartEvent("disablekill",false);
 				disablekill=true;
+			}
+		else
+		if (command=="enablekill")
+			{
+				StartEvent("enablekill",false);
+				disablekill=false;
 			}
 		else
 		for (unsigned i=0; i<config.warevents.size();i++)
@@ -1802,7 +1813,7 @@ vagy
 			for(int i=0;i<n;++i)
 				if( sock.context.realm   ==socketek[i]->context.realm &&
 					sock.context.checksum==socketek[i]->context.checksum)
-					SendChat(*socketek[i],uzenet,sock.context.glyph);
+					SendChat(*socketek[i],uzenet,sock.context.glyph,sock.context.nev);
 
 			AddToChatlog(sock,uzenet);
 		}
@@ -2044,7 +2055,7 @@ vagy
 			{
 				const string& nev=i->first;
 				postmsg+=nev+"\r\n";
-				for (int a= 0;a<8;a++)
+				for (int a= 0;a<FEGYV_HOSSZ;a++)
 					postmsg+=itoa(i->second[a])+"\r\n";
 				for (set<WORD>::iterator j=db[nev].medal.begin();j!=db[nev].medal.end();++j)
 				{
