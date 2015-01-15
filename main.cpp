@@ -400,7 +400,7 @@ inline int fegyvtoint(int i)
 	if (i<128) // gun
 		return (i<4)?i:FEGYV_HOSSZ-1;
 	else // tech
-		return (i<127+4)?i-127:FEGYV_HOSSZ-1;
+		return (i<128+4)?i-128+4:FEGYV_HOSSZ-1;
 };
 
 #define CLIENTMSG_LOGIN 1
