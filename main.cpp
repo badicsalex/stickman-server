@@ -81,6 +81,7 @@ struct WarEvent{
 	vector<string> csunyaszavak;	//cenzúrázandó szavak
 	vector<string> viragnevek;		//amivel lecseréljük a cenzúrázandó szavakat.
 	vector<string> adminok;			//adminok listája
+	vector<string> medalok;			//medálok listája
 	string cfgsource;				//a config fájl helye
 	vector<WarEvent> warevents;
 
@@ -126,6 +127,9 @@ struct WarEvent{
 
 		fil>>tmpstr; 
 		viragnevek=explode(tmpstr,",");
+
+		fil>>tmpstr; 
+		medalok=explode(tmpstr,",");
 
 		warevents.clear();
 
@@ -2050,7 +2054,9 @@ protected:
 			TBufferedSocket sock("stickman.hu",80);
 
 			string postmsg;
+			string tmpMedal;
 			postmsg.reserve(64*1024);
+			tmpMedal.reserve(2);
 			for(map<string,TKill>::iterator i=killdb.begin();i!=killdb.end();++i)
 			{
 				const string& nev=i->first;
@@ -2059,8 +2065,13 @@ protected:
 					postmsg+=itoa(i->second[a])+"\r\n";
 				for (set<WORD>::iterator j=db[nev].medal.begin();j!=db[nev].medal.end();++j)
 				{
-					postmsg+=((char)*j);
-					postmsg+=((char)(*j>>8));
+					tmpMedal+=((char)*j);
+					tmpMedal+=((char)(*j>>8));
+					
+					if(std::find(config.medalok.begin(), config.medalok.end(), tmpMedal) != config.medalok.end())
+					{
+						postmsg+=tmpMedal;
+					}
 				}
 				postmsg+="\r\n";
 			}
