@@ -1248,7 +1248,7 @@ protected:
 				SendChat(sock,"Server version: "+itoa(config.clientversion));
 
 				string list;
-				for (int j=0;j<config.adminok.size();j++)
+				for (unsigned int j=0;j<config.adminok.size();j++)
 					list += config.adminok[j]+" ";
 				SendChat(sock,"Admins: "+list);
 			}
@@ -2071,6 +2071,7 @@ protected:
 					if(std::find(config.medalok.begin(), config.medalok.end(), tmpMedal) != config.medalok.end())
 					{
 						postmsg+=tmpMedal;
+						tmpMedal = "";
 					}
 				}
 				postmsg+="\r\n";
