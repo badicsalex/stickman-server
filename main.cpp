@@ -2071,8 +2071,9 @@ protected:
 					if(std::find(config.medalok.begin(), config.medalok.end(), tmpMedal) != config.medalok.end())
 					{
 						postmsg+=tmpMedal;
-						tmpMedal = "";
 					}
+
+					tmpMedal = "";
 				}
 				postmsg+="\r\n";
 			}
