@@ -11,10 +11,12 @@
 #include <ctime>
 #include <ctype.h>
 #include <locale>
+#include <sstream>
 
 
 //FLAGEK
 //#define WHITELIST
+//#define NO_DB_UPDATE //TODO SVN
 
 #ifdef _WIN32
 #include <windows.h>
@@ -69,9 +71,15 @@ struct WarEvent{
 	unsigned char invul;			//sebezhetetlenség, mp
 };
 
+//#define	MAX_FEGYV_HOSSZ 11		//5-5 fegyó + event fegyó (H31)
+int varFegyvHossz;					//fegyók száma, konfigból állítható, de a webszerverben is át kell állítani
+int varFegyvTeam;					//egy csapatban lévõ fegyók száma
+
  struct TConfig{
 	int clientversion;				//kliens verzió, ez alatt kickel
+	int clientminimumSCversion;		//minimum kliens verzió modoknak
 	unsigned int datachecksum;
+	vector<unsigned int> olddatachecksums; //régi verziós checksumok
 	unsigned char sharedkey[20];	//a killenkénti kriptográfiai aláírás kulcsa
 	string webinterface;			//a webes adatbázis hostneve
 	string webinterfacedown;		//a webes adatbázis letöltõ fájljának URL-je
@@ -94,10 +102,35 @@ struct WarEvent{
 	void reload()
 	{
 		ifstream fil(cfgsource.c_str());
+		string tmpstr;
+
+		fil>>tmpstr; //fegyvhossz:
+		if (tmpstr=="fegyvhossz:")
+		{
+			fil>>varFegyvHossz;
+			if (varFegyvHossz < 1)
+				varFegyvHossz=1;
+
+			fil>>varFegyvTeam;
+		}
+		else
+		{
+			varFegyvHossz=9;
+			varFegyvTeam=4;
+		}
+	
 		fil>>clientversion;
+		fil>>clientminimumSCversion;
 		fil>>hex>>datachecksum;
 
-
+		while(fil>>tmpstr && tmpstr!="-")
+		{
+			unsigned int tmp;
+			stringstream s;
+			s << hex << tmpstr;
+			s>> tmp;
+			olddatachecksums.push_back(tmp);
+		}
 	
 		for(int i=0;i<20;++i)
 		{
@@ -105,12 +138,11 @@ struct WarEvent{
 			fil>>hex>>tmp;
 			sharedkey[i]=(unsigned char)tmp;
 		}
-			
+
 		fil>>webinterface;
 		fil>>webinterfacedown;
 		fil>>webinterfaceup;
 
-		string tmpstr;
 		vector<string> tmpvec;
 		vector<string> tmpvec2;
 
@@ -242,6 +274,7 @@ struct WarEvent{
 		}
 		fil.close();
 		cout << "cfg reloaded: version " << clientversion << "\n";
+		cout << "fegyvhossz: " << varFegyvHossz << ", per team: " << varFegyvTeam << "\n";
 	}
 
 	const string ToLowercase(const string& mit) const
@@ -254,7 +287,8 @@ struct WarEvent{
 					result[i]=lowercasechars[j];
 		return result;
 	}
-} config("config.cfg");
+}
+config("config.cfg");
 
 
 
@@ -302,26 +336,26 @@ struct autoMessages{
 
 } autoMsg("msglist.txt");
 
-#define	FEGYV_HOSSZ 9
 
 struct TKill{
 	TKill(){
-		for(int i=0;i<FEGYV_HOSSZ;++i)
+		for(int i=0;i<varFegyvHossz;++i)
 			data[i]=0;
 	}
 	TKill(const TKill& honnan){
-		for(int i=0;i<FEGYV_HOSSZ;++i)
+		for(int i=0;i<varFegyvHossz;++i)
 			data[i]=honnan.data[i];
 	}
 	TKill& operator=(const TKill& honnan){
-		for(int i=0;i<FEGYV_HOSSZ;++i)
+		for(int i=0;i<varFegyvHossz;++i)
 			data[i]=honnan[i];
 		return *this;
 	}
 	int& operator[](int index){return data[index];}
 	const int& operator[](int index) const {return data[index];}
 private:
-	int data[FEGYV_HOSSZ];
+	//int data[MAX_FEGYV_HOSSZ];
+	vector<int> data;
 };
 
 struct T1v1Game{
@@ -389,22 +423,28 @@ struct TStickRecord{
 #define FOLYAMATBAN 1
 #define VEGE 2
 
+/*
 #define	FEGYV_M4A1 0
 #define	FEGYV_M82A1 1
 #define	FEGYV_LAW 2
 #define	FEGYV_MP5A3 3
+#define	FEGYV_BM3 4
 
-#define FEGYV_MPG 4
-#define	FEGYV_QUAD 5
-#define	FEGYV_NOOB 6
-#define	FEGYV_X72 7
+#define FEGYV_MPG 5
+#define	FEGYV_QUAD 6
+#define	FEGYV_NOOB 7
+#define	FEGYV_X72 8
+#define	FEGYV_LAR 9
+
+#define	FEGYV_TEAM 5
+*/
 
 inline int fegyvtoint(int i)
 {
 	if (i<128) // gun
-		return (i<4)?i:FEGYV_HOSSZ-1;
+		return (i<varFegyvTeam)?i:varFegyvHossz-1;
 	else // tech
-		return (i<128+4)?i-128+4:FEGYV_HOSSZ-1;
+		return (i<128+varFegyvTeam)?i-128+varFegyvTeam:varFegyvHossz-1;
 };
 
 #define CLIENTMSG_LOGIN 1
@@ -440,6 +480,10 @@ inline int fegyvtoint(int i)
 /*	A kliens medált kér
 	int medal id
 	char [20] crypto
+*/
+
+#define CLIENTMSG_TIME 6 //TODO
+/* A kliens idõt kér (szerver idõt) Válasz: TIME
 */
 
 #define SERVERMSG_LOGINOK 1
@@ -516,8 +560,13 @@ vagy
 
 #define SERVERMSG_TELEPORT 11
 /*
-  string coords
+  float x,
+  float y,
+  float z,
 */
+
+#define SERVERMSG_TIME 12
+
 
 class StickmanServer: public TBufferedServer<TStickContext>{
 protected:
@@ -563,7 +612,7 @@ protected:
 		sock.context.loggedin=false;
 		sock.context.registered=false;
 		sock.context.verified=false;
- 		sock.context.UID=++lastUID;
+		sock.context.UID=++lastUID;
 		for(int i=0;i<20;++i)
 			sock.context.crypto[i]=(unsigned char)rand();
 		sock.context.lastrecv=GetTickCount64();
@@ -859,11 +908,7 @@ protected:
 
 		sock.context.nyelv = nyelv;
 
-		if (verzio<config.clientversion )
-		{
-			SendKick(sock,lang(nyelv,1),true);
-			return;
-		}
+		
 		if (sock.context.loggedin)
 		{
 			SendKick(sock,lang(nyelv,2),true);
@@ -906,6 +951,27 @@ protected:
 		sock.context.port =msg.ReadChar();
 		sock.context.port+=msg.ReadChar()<<8;
 		sock.context.checksum=msg.ReadInt();
+
+		if (std::find(config.olddatachecksums.begin(), config.olddatachecksums.end(), sock.context.checksum) != config.olddatachecksums.end()) //régi verzió, de nem mod
+		{
+			SendKick(sock,lang(nyelv,1),false);
+			return;
+		}
+
+		if (sock.context.checksum!=config.datachecksum) //mod
+		{
+			if (verzio<config.clientminimumSCversion)
+			{
+				SendKick(sock,lang(nyelv,1),true);
+				return;
+			}
+		}
+		else if (verzio<config.clientversion)
+		{
+			SendKick(sock,lang(nyelv,1),true);
+			return;
+		}
+
 		if (msg.cursor!=msg.datalen) //nem jo a packetmeret
 		{
 			SendKick(sock,lang(nyelv,6),true);
@@ -1532,6 +1598,7 @@ protected:
 		if (command=="reload")
 		{
 			config.reload();
+			autoMsg.load();
 		}
 		else
 		if (command=="auto1v1")
@@ -1603,8 +1670,8 @@ protected:
 				{
 					if(pos<=0)
 						uzenet=lang(socketek[i]->context.nyelv,19);
-					SendKick(*socketek[i],socketek[i]->context.nev+lang(socketek[i]->context.nyelv,kick?20:35)+uzenet,true);
-					SendChatToAll("\x11\xe0"+socketek[i]->context.nev+lang(socketek[i]->context.nyelv,kick?21:36)+"\x11\x03"+
+					SendKick(*socketek[i],sock.context.nev+lang(socketek[i]->context.nyelv,kick?20:35)+uzenet,true);
+					SendChatToAll("\x11\xe0"+sock.context.nev+lang(socketek[i]->context.nyelv,kick?21:36)+"\x11\x03"+
 								  socketek[i]->context.nev+"\x11\xe0"+lang(socketek[i]->context.nyelv,22)+uzenet);
 					if (!kick) 
 						bans[config.ToLowercase(socketek[i]->context.nev)]=uzenet;
@@ -1787,11 +1854,11 @@ protected:
 			int pos=uzenet.find(' ');
 			if(pos>=0)
 				ChatCommand(sock, 
-				            string(uzenet.begin()+1,uzenet.begin()+pos),
+							string(uzenet.begin()+1,uzenet.begin()+pos),
 							string(uzenet.begin()+pos+1,uzenet.end()));
 			else
 				ChatCommand(sock, 
-				            string(uzenet.begin()+1,uzenet.end()),
+							string(uzenet.begin()+1,uzenet.end()),
 							"");
 		}
 		else
@@ -2061,7 +2128,7 @@ protected:
 			{
 				const string& nev=i->first;
 				postmsg+=nev+"\r\n";
-				for (int a= 0;a<FEGYV_HOSSZ;a++)
+				for (int a= 0;a<varFegyvHossz;a++)
 					postmsg+=itoa(i->second[a])+"\r\n";
 				for (set<WORD>::iterator j=db[nev].medal.begin();j!=db[nev].medal.end();++j)
 				{
@@ -2332,10 +2399,11 @@ public:
 		
 		if (lastUDB<tick-300000) //5 percenként
 		{
+			#ifndef NO_DB_UPDATE
 			UpdateDb();
+			#endif
 
 			SaveChatlog();
-			autoMsg.load();
 
 			tick=lastUDB=GetTickCount64();
 
