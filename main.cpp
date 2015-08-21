@@ -339,14 +339,17 @@ struct autoMessages{
 
 struct TKill{
 	TKill(){
-		for(int i=0;i<varFegyvHossz;++i)
-			data[i]=0;
+		data.resize(varFegyvHossz,0);
+		//for(int i=0;i<varFegyvHossz;++i)
+			//data[i]=0;
 	}
 	TKill(const TKill& honnan){
+		data.resize(varFegyvHossz);
 		for(int i=0;i<varFegyvHossz;++i)
 			data[i]=honnan.data[i];
 	}
 	TKill& operator=(const TKill& honnan){
+		data.resize(varFegyvHossz);
 		for(int i=0;i<varFegyvHossz;++i)
 			data[i]=honnan[i];
 		return *this;
