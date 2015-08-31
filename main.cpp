@@ -1972,16 +1972,7 @@ protected:
 						chall->ellenfelPont++;
 
 					if (chall->kihivoPont==chall->limit || chall->ellenfelPont==chall->limit) 
-					{					
-						if (feature1v1gamesActive)
-						{
-							Finished1v1 fin;
-							fin.player1 = challenges[i].kihivoNev;
-							fin.player2 = challenges[i].ellenfelNev;
-							fin.score1 = challenges[i].kihivoPont;
-							fin.score2 = challenges[i].ellenfelPont;
-							played1v1games.push_back(fin);
-						}
+					{				
 
 						//a két ember megkeresése
 						TMySocket *nyertes=0,*vesztes=0;
@@ -1996,6 +1987,22 @@ protected:
 						nyertes = getSocketByName(chall->ellenfelNev);		winpoint = chall->kihivoPont;
 						vesztes = getSocketByName(chall->kihivoNev);	losepoint = chall->ellenfelPont;
 						}
+
+						if (feature1v1gamesActive &&
+							nyertes->context.checksum==config.datachecksum &&
+							vesztes->context.checksum==config.datachecksum &&
+							nyertes->context.verified &&
+							vesztes->context.verified)
+						{
+							Finished1v1 fin;
+							fin.player1 = challenges[i].kihivoNev;
+							fin.player2 = challenges[i].ellenfelNev;
+							fin.score1 = challenges[i].kihivoPont;
+							fin.score2 = challenges[i].ellenfelPont;
+							played1v1games.push_back(fin);
+						}
+
+
 						if (nyertes && vesztes) SendChat(*nyertes,lang(nyertes->context.nyelv,43)+nyertes->context.nev+" ("+itoa(winpoint)+":"+itoa(losepoint)+")");
 						if (nyertes && vesztes) SendChat(*vesztes,lang(nyertes->context.nyelv,43)+nyertes->context.nev+" ("+itoa(winpoint)+":"+itoa(losepoint)+")");
 						if (nyertes) nyertes->context.realm = "";
