@@ -21,6 +21,7 @@ typedef short unsigned int WORD;
 #include <string>
 #include <vector>
 #include <iostream>
+#include <deque>
 using namespace std;
 
 class TSocketFrame
@@ -55,8 +56,8 @@ class TBufferedSocket
 {
 protected:
 	SOCKET sock;
-	vector<char> recvbuffer;
-	vector<char> sendbuffer;
+	deque<char> recvbuffer;
+	deque <char> sendbuffer;
 	TBufferedSocket(const TBufferedSocket& mirol);
 	TBufferedSocket& operator= (const TBufferedSocket& mirol);
 	bool closeaftersend;

@@ -170,11 +170,13 @@ void TBufferedSocket::Update()
  //send
 	while(sendbuffer.size()>0 && SelectForWrite(sock))
 	{
-		char* mit=&(sendbuffer[0]);
 		int mennyit=sendbuffer.size();
 		if (mennyit>16*1024)
 			mennyit=16*1024;
-		int mennyilett=send(sock,mit,mennyit,0);
+		char tmp[16*1024];
+		char *tmp_ptr=&(tmp[0]);
+		copy(sendbuffer.begin(),sendbuffer.begin()+mennyit,tmp_ptr);
+  		int mennyilett=send(sock,tmp,mennyit,0);
 
 		if (mennyilett==SOCKET_ERROR)
 			#ifdef _WIN32
