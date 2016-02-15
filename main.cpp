@@ -2125,7 +2125,7 @@ protected:
 		cout<<"Updating database..."<<endl;
 		AddToChatlog("Database update");
 		//post kills
-		if(killdb.size()>0)
+		if(socketek.size()>0)
 		{
 			cout<<"Uploading kills: "<<killdb.size()<<" users."<<endl;
 			TBufferedSocket sock("stickman.hu",80);
