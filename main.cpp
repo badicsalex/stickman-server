@@ -2154,22 +2154,38 @@ protected:
 				}
 				postmsg+="\r\n";
 			}
+
 			postmsg+="1v1data\r\n";
-			for (unsigned a=0;a<challenges.size();a++)
-				if (challenges[a].allapot==VEGE)
+			for (unsigned a = 0; a < challenges.size(); a++)
 			{
-				postmsg+=challenges[a].kihivoNev+"\r\n";
-				postmsg+=challenges[a].ellenfelNev+"\r\n";
-				postmsg+=itoa(challenges[a].kihivoPont)+"\r\n";
-				postmsg+=itoa(challenges[a].ellenfelPont)+"\r\n";
+				if (challenges[a].allapot == VEGE)
+				{
+					postmsg += challenges[a].kihivoNev + "\r\n";
+					postmsg += challenges[a].ellenfelNev + "\r\n";
+					postmsg += itoa(challenges[a].kihivoPont) + "\r\n";
+					postmsg += itoa(challenges[a].ellenfelPont) + "\r\n";
+				}
 			}
-			for (unsigned a=0;a<challenges.size();a++)
-				if (challenges[a].allapot==VEGE)
+			for (unsigned a = 0; a < challenges.size(); a++)
+			{
+				if (challenges[a].allapot == VEGE)
 				{
 					challenges[a] = challenges.back();
 					challenges.pop_back();
 					--a;
 				}
+			}
+
+			postmsg += "zerokill\r\n";
+			string delimiter = "";
+			for (map<string, TStickRecord>::iterator i = db.begin(); i != db.end(); ++i)
+			{
+				if (!killdb.count(i->first)) //nincs a killdb-ben
+				{
+					postmsg += delimiter + i->first;
+					delimiter = ",";
+				}
+			}
 
 			sock.SendLine("POST "+config.webinterfaceup+" HTTP/1.1");
 			sock.SendLine("Host: "+config.webinterface);
