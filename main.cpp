@@ -2178,11 +2178,12 @@ protected:
 
 			postmsg += "zerokill\r\n";
 			string delimiter = "";
-			for (map<string, TStickRecord>::iterator i = db.begin(); i != db.end(); ++i)
+			int n = socketek.size();
+			for (int i = 0; i < n; ++i)
 			{
-				if (!killdb.count(i->first)) //nincs a killdb-ben
+				if (!killdb.count(socketek[i]->context.nev)) //nincs a killdb-ben
 				{
-					postmsg += delimiter + i->first;
+					postmsg += delimiter + socketek[i]->context.nev;
 					delimiter = ",";
 				}
 			}
