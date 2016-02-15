@@ -2181,9 +2181,9 @@ protected:
 			int n = socketek.size();
 			for (int i = 0; i < n; ++i)
 			{
-				if (!killdb.count(socketek[i]->context.nev)) //nincs a killdb-ben
+				if (!killdb.count(config.ToLowercase(socketek[i]->context.nev))) //nincs a killdb-ben
 				{
-					postmsg += delimiter + socketek[i]->context.nev;
+					postmsg += delimiter + config.ToLowercase(socketek[i]->context.nev);
 					delimiter = ",";
 				}
 			}
