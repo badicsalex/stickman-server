@@ -2224,7 +2224,7 @@ protected:
 
 			//Küldjönk el és recv-eljünk mindent (kapcsolatzárásig)
 			unsigned long long start = GetTickCount64();
-			while (!sock.GetError() && start < GetTickCount64() - 300000) // 5 perc
+			while (!sock.GetError() && start < GetTickCount64() + 300000) // 5 perc
 			{
 				sock.Update();
 				Sleep(1);
