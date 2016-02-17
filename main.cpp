@@ -2197,7 +2197,8 @@ protected:
 			sock.SendLine(postmsg);
 			
 			string lin;
-			while(!sock.GetError())
+			unsigned long long start = GetTickCount64();
+			while (!sock.GetError() && start < GetTickCount64() + 300000) // 5 perc
 			{
 					sock.Update();
 					Sleep(1);
