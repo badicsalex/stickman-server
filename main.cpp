@@ -2223,10 +2223,11 @@ protected:
 			sock.SendLine("");
 
 			//Küldjönk el és recv-eljünk mindent (kapcsolatzárásig)
-			while(!sock.GetError())
+			unsigned long long start = GetTickCount64();
+			while (!sock.GetError() && start < GetTickCount64() - 300000) // 5 perc
 			{
-					sock.Update();
-					Sleep(1);
+				sock.Update();
+				Sleep(1);
 			}
 
 			//HTTP header átugrása
