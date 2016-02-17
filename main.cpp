@@ -1625,7 +1625,7 @@ protected:
 			int perc = atoi(humantime.substr(3,5).c_str());
 			
 
-			time_t now = time(NULL);
+			time_t now = time(0);
 			timer = *localtime(&now);	
 
 			timer.tm_hour = ora; timer.tm_min = perc; timer.tm_sec = 0;
@@ -2333,8 +2333,17 @@ public:
 
 
 	StickmanServer(int port): TBufferedServer<TStickContext>(port),lang("lang.ini"),
-		udp(port),lastUID(1),lastUDB(0),lastUDBsuccess(0),lastweather(0),weathermost(8),weathercel(15),
-		laststatusfile(0),disablekill(0),timer_active(0),lastsecond(0)
+		udp(port),
+		lastUID(1),
+		lastUDB(0),
+		lastUDBsuccess(0),
+		lastweather(0),
+		weathermost(8),
+		weathercel(15),
+		laststatusfile(0),
+		lastsecond(0),
+		disablekill(0),
+		timer_active(0)
 	{
 		feature1v1gamesActive = false;
 		
