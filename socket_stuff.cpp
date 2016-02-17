@@ -7,7 +7,7 @@ typedef int socklen_t;
 using namespace std;
 ///////////// TSocketFrame ///////////////
 
-void TSocketFrame::EnlargeBuffer(int mekkorara) //nem sokon múlt, hogy ne buffer, hanem penis legyen
+void TSocketFrame::EnlargeBuffer(int mekkorara)
 	{
 		if (mekkorara<datalen)
 			return;
@@ -147,12 +147,13 @@ TBufferedSocket::TBufferedSocket(const string& hostname,int port)
 		return;
 	}
 
+	int keepalive = 1;
+	setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
+
 	SOCKADDR_IN sockaddr;
 	sockaddr.sin_family = AF_INET;
 	sockaddr.sin_port = htons(port);
 	sockaddr.sin_addr.s_addr = *(ULONG*)he->h_addr_list[0];
-	
-	
 
 	if(connect(sock,(SOCKADDR*)&sockaddr,sizeof(sockaddr)))
 	{
